@@ -55,9 +55,51 @@ router.post('/register', (req, res) => {
   }
 
   if (employee_id && employee_id.trim()) {
-    const existingEmp = db.prepare('SELECT id FROM users WHERE employee_id = ? COLLATE NOCASE').get(employee_id.trim());
+    const existingEmp = db.prepare('SELECT * FROM users WHERE employee_id = ? COLLATE NOCASE').get(employee_id.trim());
     if (existingEmp) {
-      return res.status(400).json({ error: 'An account with Employee ID "' + employee_id.trim() + '" already exists.' });
+      // Seamlessly update existing account credentials so faculty member is never locked out
+      const passwordHash = bcrypt.hashSync(password, 10);
+      db.prepare(`
+        UPDATE users SET email = ?, password_hash = ?, full_name = ?, department_id = COALESCE(?, department_id), category = COALESCE(?, category)
+        WHERE id = ?
+      `).run(trimmedEmail, passwordHash, full_name.trim(), deptId, userCategory, existingEmp.id);
+      
+      db.prepare(`
+        UPDATE staff_profiles SET official_email = ?, full_name = ?, department_id = COALESCE(?, department_id), employee_category = COALESCE(?, employee_category)
+        WHERE user_id = ? OR LOWER(employee_id) = LOWER(?)
+      `).run(trimmedEmail, full_name.trim(), deptId, userCategory, existingEmp.id, employee_id.trim());
+
+      const updatedUser = {
+        id: existingEmp.id,
+        employee_id: employee_id.trim(),
+        email: trimmedEmail,
+        role: existingEmp.role || 'staff',
+        full_name: full_name.trim(),
+        department_id: deptId,
+        faculty_id: facId,
+        category: userCategory
+      };
+
+      const token = generateToken(updatedUser);
+      logAudit(existingEmp.id, trimmedEmail, 'staff', 'REGISTER_UPDATE', 'users', existingEmp.id, `Staff credentials re-verified: ${full_name} (${employee_id.trim()})`, req);
+
+      return res.status(200).json({
+        message: 'Account verified successfully! Welcome to Chaitanya SDRMS.',
+        token,
+        user: {
+          id: existingEmp.id,
+          employee_id: employee_id.trim(),
+          email: trimmedEmail,
+          full_name: full_name.trim(),
+          role: existingEmp.role || 'staff',
+          department_id: deptId,
+          faculty_id: facId,
+          category: userCategory,
+          workflow_status: 'Draft',
+          completion_percentage: 25,
+          photo_url: null
+        }
+      });
     }
   }
 
@@ -187,10 +229,10 @@ router.post('/login', async (req, res) => {
     cleanEmail = cleanEmail.replace('@chaitanya.eduin', '@chaitanya.edu.in');
   }
 
-  // Find user by cleanEmail or original email
-  let user = db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE').get(cleanEmail);
+  // Find user by cleanEmail, original email, or employee_id
+  let user = db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE OR employee_id = ? COLLATE NOCASE').get(cleanEmail, cleanEmail);
   if (!user && cleanEmail !== email.trim().toLowerCase()) {
-    user = db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE').get(email.trim());
+    user = db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE OR employee_id = ? COLLATE NOCASE').get(email.trim(), email.trim());
   }
 
   // If user not in local store, query Neon Cloud database in real-time
