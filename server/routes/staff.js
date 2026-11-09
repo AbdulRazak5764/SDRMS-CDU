@@ -446,8 +446,8 @@ function extractDoi(raw) {
   return match ? match[0] : raw.trim();
 }
 
-// GET /api/staff/fetch-doi - Instant DOI metadata auto-fetch from official CrossRef registry
-router.get('/fetch-doi', verifyToken, async (req, res) => {
+// GET /api/staff/fetch-doi - Instant DOI metadata auto-fetch from official CrossRef registry (Public utility)
+router.get('/fetch-doi', async (req, res) => {
   const rawDoi = req.query.doi;
   if (!rawDoi) return res.status(400).json({ error: 'DOI is required.' });
 
