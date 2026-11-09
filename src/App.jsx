@@ -195,10 +195,11 @@ export default function App() {
     : user.role?.toUpperCase();
 
   const profile = profileData?.profile || {};
-  const userDisplayName = [
-    profile.salutation || user?.salutation,
-    profile.full_name || user?.profile_full_name || user?.full_name
-  ].filter(Boolean).join(' ') || user?.full_name || 'Staff Member';
+  const rawFullName = (profile.full_name || user?.profile_full_name || user?.full_name || '').trim();
+  const rawSal = (profile.salutation || user?.salutation || '').trim();
+  const userDisplayName = rawSal && !rawFullName.toLowerCase().startsWith(rawSal.toLowerCase()) && !/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i.test(rawFullName)
+    ? `${rawSal} ${rawFullName}`
+    : (rawFullName || 'Staff Member');
 
   const userPhoto = profile.photo_url || user?.photo_url;
   const userEmployeeId = profile.employee_id || user?.employee_id || 'CDU-STAFF';

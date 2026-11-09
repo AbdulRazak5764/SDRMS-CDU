@@ -197,7 +197,13 @@ export default function StaffDashboard({ profileData, onNavigateSection, onOpenP
             <div className="space-y-1">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                 <h1 className="text-xl font-bold text-slate-900">
-                  {[profile.salutation || user?.salutation, profile.full_name || user?.full_name].filter(Boolean).join(' ') || 'Faculty Member'}
+                  {(() => {
+                    const rawFullName = (profile.full_name || user?.full_name || '').trim();
+                    const rawSal = (profile.salutation || user?.salutation || '').trim();
+                    return rawSal && !rawFullName.toLowerCase().startsWith(rawSal.toLowerCase()) && !/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i.test(rawFullName)
+                      ? `${rawSal} ${rawFullName}`
+                      : (rawFullName || 'Faculty Member');
+                  })()}
                 </h1>
                 <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusBadge.bg}`}>
                   {statusBadge.label}

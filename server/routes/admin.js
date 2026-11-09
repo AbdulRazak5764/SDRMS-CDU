@@ -185,30 +185,10 @@ router.get('/staff-list', verifyToken, requireRoles(...adminRoles), (req, res) =
   }
 
   // Strict Clearance Hierarchy Visibility Logic
-  if (!status) {
-    // Default queue views: Only show dossiers ready for that authority's action
-    if (isHOD) {
-      // HOD default queue: ONLY submitted files in their department awaiting HOD evaluation! (Drafts 100% hidden)
-      query += " AND p.workflow_status IN ('Pending HOD Approval', 'Submitted')";
-    } else if (isDean) {
-      // Dean default queue: ONLY files endorsed by HOD awaiting Dean clearance!
-      query += " AND p.workflow_status = 'Pending Dean Approval'";
-    } else if (req.user.role === 'registrar' || req.user.role === 'vc') {
-      // Registrar default queue: ONLY files endorsed by Dean awaiting Final University Seal!
-      query += " AND p.workflow_status = 'Pending Registrar Approval'";
-    }
-  } else if (status === 'All' || status === 'All Submitted') {
-    // All submitted files accessible to that tier
-    if (isHOD) {
-      query += " AND p.workflow_status != 'Draft'";
-    } else if (isDean) {
-      query += " AND p.workflow_status IN ('Pending Dean Approval', 'Pending Registrar Approval', 'Approved', 'Correction Required')";
-    } else if (req.user.role === 'registrar' || req.user.role === 'vc') {
-      // Registrar can see all submitted
-      query += " AND p.workflow_status != 'Draft'";
-    }
-  } else if (status === 'All Records') {
-    // Master institutional roster (no status restriction)
+  if (!status || status === 'All' || status === 'All Records') {
+    // 'All' shows all faculty in jurisdiction (HOD sees complete department roster, Dean sees faculty roster)
+  } else if (status === 'All Submitted') {
+    query += " AND p.workflow_status != 'Draft'";
   } else if (status === 'Pending HOD') {
     query += " AND p.workflow_status IN ('Pending HOD Approval', 'Submitted')";
   } else if (status === 'Pending Dean') {
@@ -220,7 +200,6 @@ router.get('/staff-list', verifyToken, requireRoles(...adminRoles), (req, res) =
   } else if (status === 'Correction Required') {
     query += " AND p.workflow_status = 'Correction Required'";
   } else if (status === 'Draft') {
-    // Explicitly requested drafts
     query += " AND p.workflow_status = 'Draft'";
   } else {
     query += ' AND p.workflow_status = ?';

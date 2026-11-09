@@ -26,8 +26,8 @@ export default function AdminDashboard({ onInspectStaff }) {
   const [viewLayout, setViewLayout] = useState(isRegistrar ? 'hierarchy' : 'table');
   const [inspectStaffId, setInspectStaffId] = useState(null);
 
-  // Filters & Search
-  const defaultStatusByRole = isHOD ? 'Pending HOD' : isDean ? 'Pending Dean' : isRegistrar ? 'Pending Registrar' : '';
+  // Filters & Search (Default to 'All' so HOD/Admin immediately sees all faculty members)
+  const defaultStatusByRole = 'All';
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -342,39 +342,75 @@ export default function AdminDashboard({ onInspectStaff }) {
         </div>
       </div>
 
-      {/* Summary Metrics Cards */}
+      {/* Summary Metrics Cards (Click any card to quickly filter table) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+        <div
+          onClick={() => { setSelectedStatus('All'); setViewLayout('table'); }}
+          className={`bg-white p-3.5 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-sm ${
+            selectedStatus === 'All' ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/10' : 'border-slate-200 hover:border-slate-300'
+          }`}
+          title="Click to view all staff records"
+        >
           <div className="text-[11px] font-semibold text-slate-500">Total Staff</div>
           <div className="text-2xl font-black text-slate-900 mt-1">{stats?.totalStaff ?? '—'}</div>
           <div className="text-[10px] text-slate-400 mt-0.5">{stats?.teaching || 0} Teaching</div>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-blue-200 bg-blue-50/20 shadow-2xs">
+        <div
+          onClick={() => { setSelectedStatus('Pending HOD'); setViewLayout('table'); }}
+          className={`bg-white p-3.5 rounded-2xl border transition-all cursor-pointer bg-blue-50/20 shadow-2xs hover:shadow-sm ${
+            selectedStatus === 'Pending HOD' ? 'border-blue-600 ring-2 ring-blue-500/30' : 'border-blue-200 hover:border-blue-300'
+          }`}
+          title="Click to view dossiers awaiting HOD clearance"
+        >
           <div className="text-[11px] font-semibold text-blue-700">Awaiting HOD</div>
           <div className="text-2xl font-black text-blue-900 mt-1">{stats?.pendingHOD ?? '—'}</div>
           <div className="text-[10px] text-blue-600 mt-0.5">Level 1 review</div>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-purple-200 bg-purple-50/20 shadow-2xs">
+        <div
+          onClick={() => { setSelectedStatus('Pending Dean'); setViewLayout('table'); }}
+          className={`bg-white p-3.5 rounded-2xl border transition-all cursor-pointer bg-purple-50/20 shadow-2xs hover:shadow-sm ${
+            selectedStatus === 'Pending Dean' ? 'border-purple-600 ring-2 ring-purple-500/30' : 'border-purple-200 hover:border-purple-300'
+          }`}
+          title="Click to view dossiers awaiting Dean clearance"
+        >
           <div className="text-[11px] font-semibold text-purple-700">Awaiting Dean</div>
           <div className="text-2xl font-black text-purple-900 mt-1">{stats?.pendingDean ?? '—'}</div>
           <div className="text-[10px] text-purple-600 mt-0.5">Level 2 review</div>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-amber-200 bg-amber-50/20 shadow-2xs">
+        <div
+          onClick={() => { setSelectedStatus('Pending Registrar'); setViewLayout('table'); }}
+          className={`bg-white p-3.5 rounded-2xl border transition-all cursor-pointer bg-amber-50/20 shadow-2xs hover:shadow-sm ${
+            selectedStatus === 'Pending Registrar' ? 'border-amber-600 ring-2 ring-amber-500/30' : 'border-amber-200 hover:border-amber-300'
+          }`}
+          title="Click to view dossiers awaiting Registrar seal"
+        >
           <div className="text-[11px] font-semibold text-amber-700">Awaiting Registrar</div>
           <div className="text-2xl font-black text-amber-900 mt-1">{stats?.pendingRegistrar ?? '—'}</div>
           <div className="text-[10px] text-amber-700 mt-0.5">Final seal</div>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-rose-200 bg-rose-50/30 shadow-2xs">
+        <div
+          onClick={() => { setSelectedStatus('Correction Required'); setViewLayout('table'); }}
+          className={`bg-white p-3.5 rounded-2xl border transition-all cursor-pointer bg-rose-50/30 shadow-2xs hover:shadow-sm ${
+            selectedStatus === 'Correction Required' ? 'border-rose-600 ring-2 ring-rose-500/30' : 'border-rose-200 hover:border-rose-300'
+          }`}
+          title="Click to view records returned for correction"
+        >
           <div className="text-[11px] font-semibold text-rose-700">Needs Correction</div>
           <div className="text-2xl font-black text-rose-900 mt-1">{stats?.correctionRequired ?? '—'}</div>
           <div className="text-[10px] text-rose-600 mt-0.5">Returned to faculty</div>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-emerald-200 bg-emerald-50/20 shadow-2xs">
+        <div
+          onClick={() => { setSelectedStatus('Approved'); setViewLayout('table'); }}
+          className={`bg-white p-3.5 rounded-2xl border transition-all cursor-pointer bg-emerald-50/20 shadow-2xs hover:shadow-sm ${
+            selectedStatus === 'Approved' ? 'border-emerald-600 ring-2 ring-emerald-500/30' : 'border-emerald-200 hover:border-emerald-300'
+          }`}
+          title="Click to view certified approved dossiers"
+        >
           <div className="text-[11px] font-semibold text-emerald-700">Approved & Sealed</div>
           <div className="text-2xl font-black text-emerald-900 mt-1">{stats?.approved ?? '—'}</div>
           <div className="text-[10px] text-emerald-600 mt-0.5">Certified dossiers</div>
@@ -879,11 +915,11 @@ export default function AdminDashboard({ onInspectStaff }) {
                 >
                   {isHOD && (
                     <>
+                      <option value="All">All Department Staff (All Records)</option>
                       <option value="Pending HOD">⚡ Pending HOD Clearance (Action Required)</option>
-                      <option value="All">All Submitted Records (Dept)</option>
+                      <option value="Draft">Draft Profiles (In Progress)</option>
                       <option value="Approved">Approved & Certified</option>
                       <option value="Correction Required">Correction Required</option>
-                      <option value="Draft">Unsubmitted Drafts (In Progress)</option>
                     </>
                   )}
                   {isDean && (
@@ -992,11 +1028,11 @@ export default function AdminDashboard({ onInspectStaff }) {
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
-                              onClick={() => onInspectStaff(st.id)}
-                              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-1 shadow-2xs"
+                              onClick={() => setInspectStaffId(st.id)}
+                              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-1 shadow-2xs cursor-pointer"
                               title="Inspect full dossier"
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              <Eye className="w-3.5 h-3.5 text-blue-600" />
                               <span>Inspect</span>
                             </button>
 
@@ -1177,6 +1213,19 @@ export default function AdminDashboard({ onInspectStaff }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Faculty Comprehensive Inspection Modal */}
+      {inspectStaffId && (
+        <FacultyInspectModal
+          staffId={inspectStaffId}
+          onClose={() => setInspectStaffId(null)}
+          onRefreshList={fetchStaffList}
+          onOpenPrint={() => {
+            if (onInspectStaff) onInspectStaff(inspectStaffId);
+            setInspectStaffId(null);
+          }}
+        />
       )}
     </div>
   );
