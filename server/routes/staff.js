@@ -2,50 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const { verifyToken, logAudit } = require('../auth');
-const { syncPublicationToNeon, syncBulkPublicationsToNeon } = require('../neon');
+const { syncPublicationToNeon, syncBulkPublicationsToNeon, syncProfileToNeon } = require('../neon');
 const { createNotification } = require('../notifications');
-
-// Helper to calculate completion percentage and omission checklist
-function calculateProfileStatus(profileId) {
-  const profile = db.prepare('SELECT * FROM staff_profiles WHERE id = ?').get(profileId);
-  if (!profile) return { completion: 0, omissions: [] };
-
-  const omissions = [];
-  let score = 30; // base score
-
-  // 1. Personal Info
-  if (profile.full_name) score += 10; else omissions.push({ section: 1, field: 'Full Name', text: 'Full Name as per official records is required' });
-  if (profile.official_email) score += 10; else omissions.push({ section: 1, field: 'Official Email', text: 'Official University email is required' });
-  if (profile.mobile) score += 5;
-  if (profile.dob) score += 5;
-  if (profile.gender) score += 5;
-  if (profile.current_address) score += 5;
-
-  // 2. Employment Details
-  if (profile.employee_category === 'Teaching') {
-    if (profile.department_id) score += 10; else omissions.push({ section: 2, field: 'Department', text: 'Department selection is required' });
-  } else {
-    if (profile.administrative_unit || profile.designation) score += 10;
-  }
-  if (profile.designation) score += 5;
-  if (profile.employment_type) score += 5;
-  if (profile.joining_date_university) score += 5;
-
-  // 3. Educational Qualifications
-  const eduCount = db.prepare('SELECT COUNT(*) as cnt FROM educational_qualifications WHERE staff_id = ?').get(profileId).cnt;
-  if (eduCount > 0) score += 10;
-
-  // 4. Documents Upload
-  const docCount = db.prepare('SELECT COUNT(*) as cnt FROM documents WHERE staff_id = ?').get(profileId).cnt;
-  if (docCount > 0) score += 10;
-
-  const finalCompletion = Math.min(100, Math.max(25, score));
-
-  // Update profile completion in DB
-  db.prepare('UPDATE staff_profiles SET completion_percentage = ? WHERE id = ?').run(finalCompletion, profileId);
-
-  return { completion: finalCompletion, omissions };
-}
+const { calculateProfileStatus, getOrCreateStaffProfile } = require('../profileHelper');
 
 // Helper to auto-calculate years between dates
 function calculateExperienceYears(startDateStr, endDateStr) {
@@ -60,59 +19,21 @@ function calculateExperienceYears(startDateStr, endDateStr) {
 
 // GET /api/staff/my-profile
 router.get('/my-profile', verifyToken, (req, res) => {
-  // Ensure profile exists for this user
+  // Ensure profile exists for this user (auto-heal on Vercel cold starts)
+  const baseProfile = getOrCreateStaffProfile(req.user);
+  const targetId = baseProfile ? baseProfile.id : 0;
+
   let profile = db.prepare(`
     SELECT p.*, d.name as department_name, d.hod_name, f.name as faculty_name, f.dean_name, u.email as user_email, u.role as user_role
     FROM staff_profiles p
     LEFT JOIN departments d ON p.department_id = d.id
     LEFT JOIN faculties f ON (p.faculty_id = f.id OR d.faculty_id = f.id)
     LEFT JOIN users u ON p.user_id = u.id
-    WHERE p.user_id = ?
-  `).get(req.user.id);
+    WHERE p.id = ?
+  `).get(targetId);
 
   if (!profile) {
-    // Lookup default department & faculty from user
-    const userRow = db.prepare('SELECT department_id, faculty_id FROM users WHERE id = ?').get(req.user.id);
-    let facId = userRow?.faculty_id;
-    let hodId = null;
-    let deanId = null;
-
-    if (userRow?.department_id) {
-      const dept = db.prepare('SELECT faculty_id, hod_id FROM departments WHERE id = ?').get(userRow.department_id);
-      if (dept) {
-        facId = facId || dept.faculty_id;
-        hodId = dept.hod_id;
-      }
-    }
-    if (facId) {
-      const fac = db.prepare('SELECT dean_id FROM faculties WHERE id = ?').get(facId);
-      if (fac) deanId = fac.dean_id;
-    }
-
-    const info = db.prepare(`
-      INSERT INTO staff_profiles (
-        user_id, employee_id, full_name, official_email, department_id, faculty_id,
-        hod_id, dean_id, employee_category, workflow_status, completion_percentage
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 25)
-    `).run(
-      req.user.id,
-      req.user.employee_id,
-      req.user.full_name,
-      req.user.email,
-      req.user.department_id,
-      facId,
-      hodId,
-      deanId,
-      req.user.category || 'Teaching'
-    );
-    profile = db.prepare(`
-      SELECT p.*, d.name as department_name, d.hod_name, f.name as faculty_name, f.dean_name, u.email as user_email, u.role as user_role
-      FROM staff_profiles p
-      LEFT JOIN departments d ON p.department_id = d.id
-      LEFT JOIN faculties f ON (p.faculty_id = f.id OR d.faculty_id = f.id)
-      LEFT JOIN users u ON p.user_id = u.id
-      WHERE p.id = ?
-    `).get(info.lastInsertRowid);
+    profile = baseProfile;
   }
 
   const profileId = profile.id;
@@ -200,9 +121,9 @@ router.get('/my-profile', verifyToken, (req, res) => {
 // PUT /api/staff/my-profile
 // Save draft or update form fields
 router.put('/my-profile', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT * FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   if (!profile) {
-    return res.status(404).json({ error: 'Profile not found.' });
+    return res.status(500).json({ error: 'Unable to initialize staff profile.' });
   }
 
   // Prevent edits if already submitted or approved unless reopened for correction
@@ -227,13 +148,40 @@ router.put('/my-profile', verifyToken, (req, res) => {
 
   // Update users table if employee_id, full_name, or salutation changed
   if (b.employee_id && b.employee_id.trim()) {
-    db.prepare('UPDATE users SET employee_id = ? WHERE id = ?').run(b.employee_id.trim(), req.user.id);
+    try {
+      db.prepare('UPDATE users SET employee_id = ? WHERE id = ?').run(b.employee_id.trim(), req.user.id);
+    } catch (_) {}
   }
   const effectiveSalutation = b.salutation !== undefined ? b.salutation : (profile.salutation || '');
   const effectiveBaseName = b.full_name !== undefined ? b.full_name.trim() : (profile.full_name || '');
   if (effectiveBaseName) {
     const combinedFullName = [effectiveSalutation, effectiveBaseName].filter(Boolean).join(' ');
-    db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(combinedFullName, req.user.id);
+    try {
+      db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(combinedFullName, req.user.id);
+    } catch (_) {}
+  }
+
+  // Safe integer parsing for foreign keys
+  const cleanIntOrNull = (val) => {
+    if (val === undefined || val === null || val === '') return null;
+    const parsed = parseInt(val, 10);
+    return isNaN(parsed) ? null : parsed;
+  };
+  const deptIdVal = cleanIntOrNull(b.department_id) !== null ? cleanIntOrNull(b.department_id) : profile.department_id;
+  const facIdVal = cleanIntOrNull(b.faculty_id) !== null ? cleanIntOrNull(b.faculty_id) : profile.faculty_id;
+
+  // Keep HOD and Dean pointers in sync with selected department
+  let newHodId = profile.hod_id;
+  let newDeanId = profile.dean_id;
+  if (deptIdVal && deptIdVal !== profile.department_id) {
+    const deptRow = db.prepare('SELECT faculty_id, hod_id FROM departments WHERE id = ?').get(deptIdVal);
+    if (deptRow) {
+      newHodId = deptRow.hod_id || newHodId;
+      if (deptRow.faculty_id) {
+        const facRow = db.prepare('SELECT dean_id FROM faculties WHERE id = ?').get(deptRow.faculty_id);
+        if (facRow) newDeanId = facRow.dean_id || newDeanId;
+      }
+    }
   }
 
   const stmt = db.prepare(`
@@ -265,8 +213,10 @@ router.put('/my-profile', verifyToken, (req, res) => {
       emergency_contact_phone = COALESCE(?, emergency_contact_phone),
 
       employee_category = COALESCE(?, employee_category),
-      faculty_id = COALESCE(?, faculty_id),
-      department_id = COALESCE(?, department_id),
+      faculty_id = ?,
+      department_id = ?,
+      hod_id = ?,
+      dean_id = ?,
       designation = COALESCE(?, designation),
       employment_type = COALESCE(?, employment_type),
       appointment_order_no = COALESCE(?, appointment_order_no),
@@ -315,7 +265,12 @@ router.put('/my-profile', verifyToken, (req, res) => {
     b.current_address, b.permanent_address, b.city, b.state, b.pincode, b.country,
     b.emergency_contact_name, b.emergency_contact_relationship, b.emergency_contact_phone,
 
-    b.employee_category, b.faculty_id, b.department_id, b.designation, b.employment_type,
+    b.employee_category,
+    facIdVal,
+    deptIdVal,
+    newHodId,
+    newDeanId,
+    b.designation, b.employment_type,
     b.appointment_order_no, b.appointment_order_date,
     b.joining_date_university, b.joining_date_present_position, b.joining_date_present_department,
     b.previous_designation_univ, b.reporting_officer, b.campus_location, b.employment_status,
@@ -330,6 +285,14 @@ router.put('/my-profile', verifyToken, (req, res) => {
 
   const { completion, omissions } = calculateProfileStatus(profile.id);
 
+  // Sync updated profile to Neon PostgreSQL in real-time
+  try {
+    const updatedProfile = db.prepare('SELECT * FROM staff_profiles WHERE id = ?').get(profile.id);
+    if (updatedProfile) {
+      syncProfileToNeon(updatedProfile).catch(err => console.error('Neon profile sync error:', err.message));
+    }
+  } catch (_) {}
+
   logAudit(req.user.id, req.user.email, req.user.role, 'PROFILE_SAVE_DRAFT', 'staff_profiles', profile.id, 'Saved draft changes to staff profile', req);
 
   res.json({
@@ -341,8 +304,7 @@ router.put('/my-profile', verifyToken, (req, res) => {
 
 // POST /api/staff/education (Add qualification)
 router.post('/education', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id, workflow_status FROM staff_profiles WHERE user_id = ?').get(req.user.id);
-  if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+  const profile = getOrCreateStaffProfile(req.user);
   if (['Submitted', 'Under Verification', 'Approved'].includes(profile.workflow_status)) {
     return res.status(400).json({ error: 'Cannot modify qualifications while profile is submitted or approved.' });
   }
@@ -378,9 +340,7 @@ router.post('/education', verifyToken, (req, res) => {
 
 // DELETE /api/staff/education/:id
 router.delete('/education/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id, workflow_status FROM staff_profiles WHERE user_id = ?').get(req.user.id);
-  if (!profile) return res.status(404).json({ error: 'Profile not found.' });
-
+  const profile = getOrCreateStaffProfile(req.user);
   db.prepare('DELETE FROM educational_qualifications WHERE id = ? AND staff_id = ?').run(req.params.id, profile.id);
   calculateProfileStatus(profile.id);
   res.json({ message: 'Qualification removed successfully.' });
@@ -388,8 +348,7 @@ router.delete('/education/:id', verifyToken, (req, res) => {
 
 // Repeatable: Professional Qualifications
 router.post('/professional', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id, workflow_status FROM staff_profiles WHERE user_id = ?').get(req.user.id);
-  if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+  const profile = getOrCreateStaffProfile(req.user);
 
   const { qualification_type, title_or_exam, qualifying_authority, registration_no, award_date, validity_date } = req.body;
   if (!title_or_exam) return res.status(400).json({ error: 'Examination / accreditation title is required.' });
@@ -409,15 +368,14 @@ router.post('/professional', verifyToken, (req, res) => {
 });
 
 router.delete('/professional/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   db.prepare('DELETE FROM professional_qualifications WHERE id = ? AND staff_id = ?').run(req.params.id, profile.id);
   res.json({ message: 'Record removed.' });
 });
 
 // Repeatable: Teaching Experience
 router.post('/teaching-exp', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id, workflow_status FROM staff_profiles WHERE user_id = ?').get(req.user.id);
-  if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+  const profile = getOrCreateStaffProfile(req.user);
 
   const { institution_name, designation_held, department, institution_type, employment_type, start_date, end_date, is_current, full_or_part_time, subjects_taught, teaching_involvement } = req.body;
   if (!institution_name || !designation_held || !start_date) return res.status(400).json({ error: 'Institution name, designation, and start date are required.' });
@@ -434,7 +392,7 @@ router.post('/teaching-exp', verifyToken, (req, res) => {
 });
 
 router.delete('/teaching-exp/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   db.prepare('DELETE FROM teaching_experiences WHERE id = ? AND staff_id = ?').run(req.params.id, profile.id);
   res.json({ message: 'Record removed.' });
 });
@@ -514,8 +472,7 @@ router.get('/fetch-doi', async (req, res) => {
 
 // POST /api/staff/bulk-publications - Import multiple papers at once (for 80+ papers)
 router.post('/bulk-publications', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
-  if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+  const profile = getOrCreateStaffProfile(req.user);
 
   const { publications } = req.body;
   if (!Array.isArray(publications) || publications.length === 0) {
@@ -560,8 +517,7 @@ router.post('/bulk-publications', verifyToken, (req, res) => {
 });
 
 router.post('/publication', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
-  if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+  const profile = getOrCreateStaffProfile(req.user);
 
   const { title, authors, journal_or_conf_name, publication_year, volume, issue, page_numbers, doi, indexing, url } = req.body;
   if (!title || !authors || !journal_or_conf_name) return res.status(400).json({ error: 'Title, authors, and journal/conference name are required.' });
@@ -591,14 +547,14 @@ router.post('/publication', verifyToken, (req, res) => {
 });
 
 router.delete('/publication/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   db.prepare('DELETE FROM research_publications WHERE id = ? AND staff_id = ?').run(req.params.id, profile.id);
   res.json({ message: 'Publication removed.' });
 });
 
 // Repeatable: Research Projects
 router.post('/project', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   const { title, funding_agency, role, sanctioned_amount, duration, status } = req.body;
   if (!title || !funding_agency) return res.status(400).json({ error: 'Project title and funding agency are required.' });
 
@@ -611,14 +567,14 @@ router.post('/project', verifyToken, (req, res) => {
 });
 
 router.delete('/project/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   db.prepare('DELETE FROM research_projects WHERE id = ? AND staff_id = ?').run(req.params.id, profile.id);
   res.json({ message: 'Project removed.' });
 });
 
 // Repeatable: Patents
 router.post('/patent', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   const { title, application_number, filing_date, grant_number, grant_date, applicant_inventors, status } = req.body;
   if (!title || !application_number) return res.status(400).json({ error: 'Title and application number are required.' });
 
@@ -631,14 +587,14 @@ router.post('/patent', verifyToken, (req, res) => {
 });
 
 router.delete('/patent/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   db.prepare('DELETE FROM patents WHERE id = ? AND staff_id = ?').run(req.params.id, profile.id);
   res.json({ message: 'Patent removed.' });
 });
 
 // Repeatable: Academic Contributions (Books, awards, Ph.D. guidance)
 router.post('/academic-contrib', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   const { category, title_or_activity, details, academic_year } = req.body;
   if (!category || !title_or_activity) return res.status(400).json({ error: 'Category and title/activity are required.' });
 
@@ -651,14 +607,14 @@ router.post('/academic-contrib', verifyToken, (req, res) => {
 });
 
 router.delete('/academic-contrib/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   db.prepare('DELETE FROM academic_contributions WHERE id = ? AND staff_id = ?').run(req.params.id, profile.id);
   res.json({ message: 'Contribution removed.' });
 });
 
 // Repeatable: Training Programmes
 router.post('/training', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   const { programme_title, organizing_institution, category, start_date, end_date, duration_hours_days, mode, certificate_no } = req.body;
   if (!programme_title || !organizing_institution) return res.status(400).json({ error: 'Programme title and organizing institution are required.' });
 
@@ -671,14 +627,14 @@ router.post('/training', verifyToken, (req, res) => {
 });
 
 router.delete('/training/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   db.prepare('DELETE FROM training_programmes WHERE id = ? AND staff_id = ?').run(req.params.id, profile.id);
   res.json({ message: 'Training entry removed.' });
 });
 
 // Repeatable: Previous Employment
 router.post('/previous-employment', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   const { employer_name, designation, department, employment_type, date_of_joining, date_of_leaving, reason_for_leaving } = req.body;
   if (!employer_name || !designation || !date_of_joining) return res.status(400).json({ error: 'Employer name, designation, and joining date are required.' });
 
@@ -691,7 +647,7 @@ router.post('/previous-employment', verifyToken, (req, res) => {
 });
 
 router.delete('/previous-employment/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   db.prepare('DELETE FROM previous_employments WHERE id = ? AND staff_id = ?').run(req.params.id, profile.id);
   res.json({ message: 'Previous employment removed.' });
 });
@@ -699,8 +655,7 @@ router.delete('/previous-employment/:id', verifyToken, (req, res) => {
 // POST /api/staff/submit
 // Section 9 / 12: Final Submission with Multi-Tier Approval Routing
 router.post('/submit', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT * FROM staff_profiles WHERE user_id = ?').get(req.user.id);
-  if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+  const profile = getOrCreateStaffProfile(req.user);
 
   const { declaration_agreed } = req.body;
   if (!declaration_agreed) {
@@ -769,6 +724,12 @@ router.post('/submit', verifyToken, (req, res) => {
     WHERE id = ?
   `);
   stmt.run(newStatus, newVersion, subRef, hodId, deanId, profile.id);
+
+  // Sync submission status to Neon Cloud
+  try {
+    const updated = db.prepare('SELECT * FROM staff_profiles WHERE id = ?').get(profile.id);
+    if (updated) syncProfileToNeon(updated).catch(() => {});
+  } catch (_) {}
 
   // Log in verification log
   db.prepare(`

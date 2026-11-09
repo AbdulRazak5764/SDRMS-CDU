@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { db } = require('../db');
 const { generateToken, verifyToken, logAudit } = require('../auth');
 const { syncUserToNeon, findUserInNeon } = require('../neon');
+const { getOrCreateStaffProfile } = require('../profileHelper');
 
 // GET /api/auth/departments - Public active university departments for registration dropdown
 router.get('/departments', (req, res) => {
@@ -258,13 +259,17 @@ router.post('/login', async (req, res) => {
   const token = generateToken(user);
   logAudit(user.id, user.email, user.role, 'LOGIN', 'users', user.id, 'User successfully authenticated', req);
 
-  // Fetch linked profile
-  const profile = db.prepare(`
+  // Fetch linked profile (auto-create if missing on Vercel serverless cold-start)
+  let profile = db.prepare(`
     SELECT id, workflow_status, completion_percentage, photo_url, department_id, faculty_id,
            hod_id, dean_id
     FROM staff_profiles
     WHERE user_id = ?
   `).get(user.id);
+
+  if (!profile && user.role === 'staff') {
+    profile = getOrCreateStaffProfile(user);
+  }
 
   // Fetch department and faculty names
   let deptName = null;
@@ -321,6 +326,11 @@ router.post('/login', async (req, res) => {
 
 // GET /api/auth/me
 router.get('/me', verifyToken, (req, res) => {
+  // Ensure profile exists for staff
+  if (req.user.role === 'staff') {
+    getOrCreateStaffProfile(req.user);
+  }
+
   const user = db.prepare(`
     SELECT u.id, u.employee_id, u.email, u.full_name, u.role, u.department_id, u.faculty_id, u.category,
            d.name as department_name, d.hod_name,

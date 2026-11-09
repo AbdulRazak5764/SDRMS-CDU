@@ -6,6 +6,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('crypto');
 const { db } = require('../db');
 const { verifyToken, requireRoles, logAudit } = require('../auth');
+const { getOrCreateStaffProfile } = require('../profileHelper');
 
 const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -53,9 +54,9 @@ router.post('/upload-photo', verifyToken, upload.single('photo'), (req, res) => 
     return res.status(400).json({ error: 'No photo uploaded.' });
   }
 
-  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   if (!profile) {
-    return res.status(404).json({ error: 'Staff profile not found.' });
+    return res.status(500).json({ error: 'Failed to access staff profile.' });
   }
 
   const photoUrl = `/api/documents/file/${req.file.filename}`;
@@ -77,9 +78,9 @@ router.post('/upload', verifyToken, upload.single('document'), (req, res) => {
     return res.status(400).json({ error: 'No document file provided.' });
   }
 
-  const profile = db.prepare('SELECT id, employee_id, workflow_status FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  const profile = getOrCreateStaffProfile(req.user);
   if (!profile) {
-    return res.status(404).json({ error: 'Staff profile not found.' });
+    return res.status(500).json({ error: 'Failed to access staff profile.' });
   }
 
   const { document_category, document_title, issuing_authority, issue_date, expiry_date } = req.body;
@@ -158,8 +159,8 @@ router.get('/file/:filename', (req, res) => {
 
 // DELETE /api/documents/:id
 router.delete('/:id', verifyToken, (req, res) => {
-  const profile = db.prepare('SELECT id, workflow_status FROM staff_profiles WHERE user_id = ?').get(req.user.id);
-  if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+  const profile = getOrCreateStaffProfile(req.user);
+  if (!profile) return res.status(500).json({ error: 'Staff profile not accessible.' });
 
   const doc = db.prepare('SELECT * FROM documents WHERE id = ? AND staff_id = ?').get(req.params.id, profile.id);
   if (!doc) return res.status(404).json({ error: 'Document not found or access denied.' });

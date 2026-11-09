@@ -490,6 +490,79 @@ async function syncBulkPublicationsToNeon(publications, staffEmployeeId) {
 }
 
 /**
+ * Real-time sync of staff profile to Neon Cloud
+ */
+async function syncProfileToNeon(profile) {
+  if (!pool || !profile) return;
+  try {
+    const query = `
+      INSERT INTO staff_profiles (
+        user_id, employee_id, salutation, full_name, employee_category,
+        official_email, mobile, department_id, faculty_id, designation,
+        employment_type, joining_date_university, workflow_status,
+        completion_percentage, calculated_total_exp_years, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id) DO UPDATE SET
+        employee_id = EXCLUDED.employee_id,
+        salutation = EXCLUDED.salutation,
+        full_name = EXCLUDED.full_name,
+        employee_category = EXCLUDED.employee_category,
+        official_email = EXCLUDED.official_email,
+        mobile = EXCLUDED.mobile,
+        department_id = EXCLUDED.department_id,
+        faculty_id = EXCLUDED.faculty_id,
+        designation = EXCLUDED.designation,
+        employment_type = EXCLUDED.employment_type,
+        joining_date_university = EXCLUDED.joining_date_university,
+        workflow_status = EXCLUDED.workflow_status,
+        completion_percentage = EXCLUDED.completion_percentage,
+        calculated_total_exp_years = EXCLUDED.calculated_total_exp_years,
+        updated_at = CURRENT_TIMESTAMP
+    `;
+    await pool.query(query, [
+      profile.user_id,
+      profile.employee_id,
+      profile.salutation || '',
+      profile.full_name || '',
+      profile.employee_category || 'Teaching',
+      profile.official_email || '',
+      profile.mobile || '',
+      profile.department_id || null,
+      profile.faculty_id || null,
+      profile.designation || '',
+      profile.employment_type || 'Regular',
+      profile.joining_date_university || null,
+      profile.workflow_status || 'Draft',
+      profile.completion_percentage || 25,
+      profile.calculated_total_exp_years || 0
+    ]);
+    console.log(`☁️ [Neon Cloud]: Real-time profile synced for ${profile.full_name} (${profile.employee_id})`);
+  } catch (err) {
+    console.error('⚠️ [Neon Profile Sync Error]:', err.message);
+  }
+}
+
+/**
+ * Find profile in Neon directly (Fallback on cold start cache miss)
+ */
+async function findProfileInNeon(userId, employeeId, email) {
+  if (!pool) return null;
+  try {
+    const res = await pool.query(
+      `SELECT * FROM staff_profiles 
+       WHERE user_id = $1 OR employee_id = $2 OR LOWER(official_email) = LOWER($3)
+       LIMIT 1`,
+      [userId || -1, employeeId || '', email || '']
+    );
+    return res.rows[0] || null;
+  } catch (err) {
+    console.error('⚠️ [Neon Find Profile Error]:', err.message);
+    return null;
+  }
+}
+
+/**
  * Find user in Neon directly (Fallback on login cache miss)
  */
 async function findUserInNeon(email) {
@@ -542,6 +615,40 @@ async function bootstrapSyncToNeon(localDb) {
           nu.status
         );
       }
+
+      // Pull missing staff_profiles from Neon into local DB
+      try {
+        const neonProfilesRes = await pool.query('SELECT * FROM staff_profiles');
+        const insertLocalProfile = localDb.prepare(`
+          INSERT OR IGNORE INTO staff_profiles (
+            user_id, employee_id, salutation, full_name, employee_category,
+            official_email, mobile, department_id, faculty_id, designation,
+            employment_type, joining_date_university, workflow_status,
+            completion_percentage, calculated_total_exp_years
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const np of neonProfilesRes.rows) {
+          insertLocalProfile.run(
+            np.user_id,
+            np.employee_id,
+            np.salutation || '',
+            np.full_name || '',
+            np.employee_category || 'Teaching',
+            np.official_email || '',
+            np.mobile || '',
+            np.department_id || null,
+            np.faculty_id || null,
+            np.designation || '',
+            np.employment_type || 'Regular',
+            np.joining_date_university || null,
+            np.workflow_status || 'Draft',
+            np.completion_percentage || 25,
+            np.calculated_total_exp_years || 0
+          );
+        }
+      } catch (profSyncErr) {
+        console.warn('Neon profile sync warning:', profSyncErr.message);
+      }
     }
   } catch (err) {
     console.error('⚠️ [Neon Bootstrap Sync Error]:', err.message);
@@ -556,6 +663,8 @@ module.exports = {
   deleteUserFromNeon,
   syncPublicationToNeon,
   syncBulkPublicationsToNeon,
+  syncProfileToNeon,
+  findProfileInNeon,
   findUserInNeon,
   bootstrapSyncToNeon
 };
