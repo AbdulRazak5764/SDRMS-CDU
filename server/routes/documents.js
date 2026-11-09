@@ -8,8 +8,13 @@ const { db } = require('../db');
 const { verifyToken, requireRoles, logAudit } = require('../auth');
 const { getOrCreateStaffProfile } = require('../profileHelper');
 
-const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
-fs.mkdirSync(uploadsDir, { recursive: true });
+const isVercel = !!process.env.VERCEL;
+const uploadsDir = isVercel ? '/tmp/uploads' : path.join(__dirname, '..', '..', 'uploads');
+try {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+} catch (dirErr) {
+  console.warn('[Uploads Dir Init Warn]:', dirErr.message);
+}
 
 // Allowed file types
 const ALLOWED_MIME_TYPES = [
@@ -19,9 +24,12 @@ const ALLOWED_MIME_TYPES = [
   'image/webp'
 ];
 
-// Configure Multer storage
-const storage = multer.diskStorage({
+// Configure Multer storage for documents (PDFs, certificates)
+const docStorage = multer.diskStorage({
   destination: (req, file, cb) => {
+    try {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    } catch (_) {}
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
@@ -42,14 +50,22 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-const upload = multer({
-  storage,
+// Document upload handler (disk storage in /tmp/uploads)
+const uploadDoc = multer({
+  storage: docStorage,
   fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB hard ceiling
 });
 
+// Memory storage for photos (stored directly as base64 in database to avoid read-only filesystem issues)
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB ceiling
+});
+
 // POST /api/documents/upload-photo
-router.post('/upload-photo', verifyToken, upload.single('photo'), (req, res) => {
+router.post('/upload-photo', verifyToken, photoUpload.single('photo'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No photo uploaded.' });
   }
@@ -59,7 +75,17 @@ router.post('/upload-photo', verifyToken, upload.single('photo'), (req, res) => 
     return res.status(500).json({ error: 'Failed to access staff profile.' });
   }
 
-  const photoUrl = `/api/documents/file/${req.file.filename}`;
+  // Convert uploaded photo to persistent base64 Data URI (serverless-resilient: zero filesystem dependency)
+  const mimeType = req.file.mimetype || 'image/jpeg';
+  const base64Data = req.file.buffer.toString('base64');
+  const photoUrl = `data:${mimeType};base64,${base64Data}`;
+
+  // Also write a copy to disk if /tmp is writable
+  try {
+    const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
+    const diskFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${ext}`;
+    fs.writeFileSync(path.join(uploadsDir, diskFileName), req.file.buffer);
+  } catch (_) {}
 
   db.prepare('UPDATE staff_profiles SET photo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(photoUrl, profile.id);
@@ -73,7 +99,7 @@ router.post('/upload-photo', verifyToken, upload.single('photo'), (req, res) => 
 });
 
 // POST /api/documents/upload
-router.post('/upload', verifyToken, upload.single('document'), (req, res) => {
+router.post('/upload', verifyToken, uploadDoc.single('document'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No document file provided.' });
   }
