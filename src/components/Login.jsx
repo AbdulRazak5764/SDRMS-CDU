@@ -266,7 +266,17 @@ export default function Login({ onBackToLanding, initialMode = 'login', initialP
     if (!loginEmail || !loginPassword) return;
     setSubmitting(true);
     const portalStr = typeof activePortal === 'string' ? activePortal : 'faculty';
-    const emailStr = String(loginEmail || '').trim();
+    let emailStr = String(loginEmail || '').trim();
+    
+    // Auto-correct common typos like chaitnaya -> chaitanya, eduin -> edu.in
+    emailStr = emailStr.replace(/@(chaitnaya|chatanya|chaitnya|chaitanyau|chaitanya)\.(edu\.in|eduin|in|ac\.in)/i, '@chaitanya.edu.in');
+    if (emailStr.endsWith('@chaitanya.eduin')) {
+      emailStr = emailStr.replace('@chaitanya.eduin', '@chaitanya.edu.in');
+    }
+    if (emailStr.endsWith('@chaitnaya.edu.in')) {
+      emailStr = emailStr.replace('@chaitnaya.edu.in', '@chaitanya.edu.in');
+    }
+
     const passStr = String(loginPassword || '');
     const result = await login(emailStr, passStr, portalStr);
     if (!result?.success) {
@@ -282,13 +292,18 @@ export default function Login({ onBackToLanding, initialMode = 'login', initialP
 
     let trimmedEmail = (regForm.email || '').toLowerCase().trim();
 
-    // Auto-fix typo if user typed @chaitanya.eduin without the dot
+    // Auto-fix typos in domain
+    trimmedEmail = trimmedEmail.replace(/@(chaitnaya|chatanya|chaitnya|chaitanyau|chaitanya)\.(edu\.in|eduin|in|ac\.in)/i, '@chaitanya.edu.in');
     if (trimmedEmail.endsWith('@chaitanya.eduin')) {
       trimmedEmail = trimmedEmail.replace('@chaitanya.eduin', '@chaitanya.edu.in');
+    }
+    if (trimmedEmail.endsWith('@chaitnaya.edu.in')) {
+      trimmedEmail = trimmedEmail.replace('@chaitnaya.edu.in', '@chaitanya.edu.in');
     }
 
     const isCollegeEmail =
       trimmedEmail.includes('chaitanya') ||
+      trimmedEmail.includes('chaitnaya') ||
       trimmedEmail.endsWith('.edu.in');
 
     if (!isCollegeEmail) {
@@ -833,21 +848,21 @@ export default function Login({ onBackToLanding, initialMode = 'login', initialP
                       </div>
                     )}
 
-                    {/* Email Address */}
+                    {/* Email Address or Employee ID */}
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        University Email Address <span className="text-rose-500">*</span>
+                        University Email or Employee ID <span className="text-rose-500">*</span>
                       </label>
                       <div className="relative">
                         <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                         <input
-                          type="email"
+                          type="text"
                           value={loginEmail}
                           onChange={(e) => {
                             setLoginEmail(e.target.value);
                             setLoginError('');
                           }}
-                          placeholder="username@chaitanya.edu.in"
+                          placeholder="e.g. 23cse2035@chaitanya.edu.in or 223208033"
                           className="w-full pl-9 pr-3 py-2 bg-slate-50/80 border border-slate-300 rounded-lg text-xs text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                           required
                         />
