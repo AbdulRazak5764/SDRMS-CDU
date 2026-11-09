@@ -3,6 +3,7 @@ const router = express.Router();
 const { db } = require('../db');
 const { verifyToken, logAudit } = require('../auth');
 const { syncPublicationToNeon, syncBulkPublicationsToNeon } = require('../neon');
+const { createNotification } = require('../notifications');
 
 // Helper to calculate completion percentage and omission checklist
 function calculateProfileStatus(profileId) {
@@ -786,6 +787,44 @@ router.post('/submit', verifyToken, (req, res) => {
   );
 
   logAudit(req.user.id, req.user.email, userRole, 'PROFILE_SUBMIT', 'staff_profiles', profile.id, `Submitted staff profile ref ${subRef} (Status: ${newStatus})`, req);
+
+  // Send real-time notification to HOD and submitter
+  const deptInfo = db.prepare('SELECT name FROM departments WHERE id = ?').get(profile.department_id);
+  const deptName = deptInfo ? deptInfo.name : 'Assigned Department';
+
+  if (userRole === 'staff') {
+    createNotification({
+      target_role: 'hod',
+      department_id: profile.department_id,
+      title: '📋 New Faculty Dossier Submitted',
+      message: `Faculty member "${profile.full_name || req.user.full_name}" (${deptName}) has submitted their digital dossier for your HOD Evaluation & Scrutiny.`,
+      type: 'submission',
+      staff_profile_id: profile.id,
+      staff_name: profile.full_name || req.user.full_name,
+      department_name: deptName
+    });
+
+    createNotification({
+      user_id: req.user.id,
+      title: '📤 Dossier Routed to HOD Desk',
+      message: `Your official digital dossier has been submitted and is now awaiting Level 1 scrutiny by the Head of Department (${deptName}).`,
+      type: 'info',
+      staff_profile_id: profile.id,
+      staff_name: profile.full_name || req.user.full_name,
+      department_name: deptName
+    });
+  } else if (userRole === 'hod') {
+    createNotification({
+      target_role: 'dean',
+      faculty_id: profile.faculty_id,
+      title: '🏛️ HOD Dossier Submitted to Dean',
+      message: `Head of Department "${profile.full_name || req.user.full_name}" (${deptName}) has submitted their dossier for Dean Review.`,
+      type: 'submission',
+      staff_profile_id: profile.id,
+      staff_name: profile.full_name || req.user.full_name,
+      department_name: deptName
+    });
+  }
 
   res.json({
     message: routingMessage,

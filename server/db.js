@@ -414,6 +414,23 @@ function initSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- University Clearance Notifications & Review Alerts
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      target_role TEXT,
+      department_id INTEGER,
+      faculty_id INTEGER,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      type TEXT DEFAULT 'info',
+      staff_profile_id INTEGER,
+      staff_name TEXT,
+      department_name TEXT,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- System Settings
     CREATE TABLE IF NOT EXISTS system_settings (
       key TEXT PRIMARY KEY,

@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const staffRoutes = require('./routes/staff');
 const documentRoutes = require('./routes/documents');
 const adminRoutes = require('./routes/admin');
+const notificationRoutes = require('./routes/notifications');
 const { db, initSchema } = require('./db');
 const { initNeonSchema, bootstrapSyncToNeon, isNeonConnected } = require('./neon');
 
@@ -99,6 +100,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 7. Serve built frontend assets in production
 const distPath = path.join(__dirname, '..', 'dist');

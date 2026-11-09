@@ -11,6 +11,7 @@ export default function Header({ activeTab, setActiveTab, profileData }) {
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [activeNotifFilter, setActiveNotifFilter] = useState('all'); // 'all' or 'approvals'
+  const [apiNotifications, setApiNotifications] = useState([]);
   const notifRef = useRef(null);
 
   const [readNotificationIds, setReadNotificationIds] = useState(() => {
@@ -20,6 +21,27 @@ export default function Header({ activeTab, setActiveTab, profileData }) {
       return [];
     }
   });
+
+  // Real-time clearance notifications fetch for HOD, Dean, Registrar, and Faculty
+  const fetchLiveNotifications = async () => {
+    try {
+      const res = await fetch('/api/notifications', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('sdrms_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setApiNotifications(data.notifications || []);
+      }
+    } catch (err) {
+      // quiet fail
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveNotifications();
+    const interval = setInterval(fetchLiveNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   // Close notifications dropdown on click outside
   useEffect(() => {
@@ -66,7 +88,23 @@ export default function Header({ activeTab, setActiveTab, profileData }) {
 
   const rawNotifications = [];
 
-  // 1. Logs from HOD / Dean / Registrar approvals
+  // 1. Live Notifications from multi-tier clearance engine (for HOD, Dean, Registrar, and Faculty)
+  apiNotifications.forEach((n) => {
+    rawNotifications.push({
+      id: `api-${n.id}`,
+      type: n.type || 'info',
+      title: n.title,
+      message: n.message,
+      reviewer: n.department_name || (n.staff_name ? `Staff: ${n.staff_name}` : 'Clearance Desk'),
+      time: n.created_at
+        ? new Date(n.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+        : 'Live',
+      staffProfileId: n.staff_profile_id,
+      isClearance: n.type === 'approval' || n.type === 'submission'
+    });
+  });
+
+  // 2. Logs from HOD / Dean / Registrar approvals
   logs.forEach((log, idx) => {
     const isApproved = Boolean(
       log.action?.includes('ENDORSE') ||
@@ -183,6 +221,10 @@ export default function Header({ activeTab, setActiveTab, profileData }) {
     setReadNotificationIds(allIds);
     try {
       localStorage.setItem('sdrms_read_notifications', JSON.stringify(allIds));
+      fetch('/api/notifications/mark-all-read', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('sdrms_token')}` }
+      }).catch(() => {});
     } catch (err) {
       console.error(err);
     }

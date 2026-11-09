@@ -27,10 +27,11 @@ export default function AdminDashboard({ onInspectStaff }) {
   const [inspectStaffId, setInspectStaffId] = useState(null);
 
   // Filters & Search
+  const defaultStatusByRole = isHOD ? 'Pending HOD' : isDean ? 'Pending Dean' : isRegistrar ? 'Pending Registrar' : '';
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState(defaultStatusByRole);
   const [sortBy, setSortBy] = useState('recent');
 
   // Hierarchy expand states
@@ -540,15 +541,35 @@ export default function AdminDashboard({ onInspectStaff }) {
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 font-bold"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 font-bold text-slate-800"
                 >
-                  <option value="">All Clearance Stages</option>
-                  <option value="Pending HOD">Pending HOD Clearance</option>
-                  <option value="Pending Dean">Pending Dean Clearance</option>
-                  <option value="Pending Registrar">Pending Registrar Clearance</option>
-                  <option value="Approved">Approved & Certified</option>
-                  <option value="Correction Required">Correction Required</option>
-                  <option value="Draft">Draft</option>
+                  {isHOD && (
+                    <>
+                      <option value="Pending HOD">⚡ Pending HOD Clearance (Action Required)</option>
+                      <option value="All">All Submitted Records (Dept)</option>
+                      <option value="Approved">Approved & Certified</option>
+                      <option value="Correction Required">Correction Required</option>
+                      <option value="Draft">Unsubmitted Drafts (In Progress)</option>
+                    </>
+                  )}
+                  {isDean && (
+                    <>
+                      <option value="Pending Dean">⚡ Pending Dean Clearance (Action Required)</option>
+                      <option value="All">All HOD-Endorsed Submissions</option>
+                      <option value="Pending Registrar">Forwarded to Registrar</option>
+                      <option value="Approved">Approved & Certified</option>
+                      <option value="Correction Required">Correction Required</option>
+                    </>
+                  )}
+                  {(isRegistrar || isVC || isHR) && (
+                    <>
+                      <option value="Pending Registrar">⚡ Pending Registrar Clearance (Action Required)</option>
+                      <option value="All">All Submissions (HOD & Dean Approved)</option>
+                      <option value="Approved">Approved & Sealed in Archives</option>
+                      <option value="Correction Required">Correction Required</option>
+                      <option value="All Records">University Master Roster (All Staff)</option>
+                    </>
+                  )}
                 </select>
               </div>
 

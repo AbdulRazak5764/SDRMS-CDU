@@ -5,6 +5,7 @@ const path = require('path');
 const { db } = require('../db');
 const { verifyToken, requireRoles, logAudit } = require('../auth');
 const { deleteUserFromNeon, syncUserToNeon } = require('../neon');
+const { createNotification } = require('../notifications');
 
 const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
 
@@ -182,17 +183,47 @@ router.get('/staff-list', verifyToken, requireRoles(...adminRoles), (req, res) =
     params.push(category);
   }
 
-  if (status) {
-    if (status === 'Pending HOD') {
+  // Strict Clearance Hierarchy Visibility Logic
+  if (!status) {
+    // Default queue views: Only show dossiers ready for that authority's action
+    if (isHOD) {
+      // HOD default queue: ONLY submitted files in their department awaiting HOD evaluation! (Drafts 100% hidden)
       query += " AND p.workflow_status IN ('Pending HOD Approval', 'Submitted')";
-    } else if (status === 'Pending Dean') {
+    } else if (isDean) {
+      // Dean default queue: ONLY files endorsed by HOD awaiting Dean clearance!
       query += " AND p.workflow_status = 'Pending Dean Approval'";
-    } else if (status === 'Pending Registrar') {
+    } else if (req.user.role === 'registrar' || req.user.role === 'vc') {
+      // Registrar default queue: ONLY files endorsed by Dean awaiting Final University Seal!
       query += " AND p.workflow_status = 'Pending Registrar Approval'";
-    } else {
-      query += ' AND p.workflow_status = ?';
-      params.push(status);
     }
+  } else if (status === 'All' || status === 'All Submitted') {
+    // All submitted files accessible to that tier
+    if (isHOD) {
+      query += " AND p.workflow_status != 'Draft'";
+    } else if (isDean) {
+      query += " AND p.workflow_status IN ('Pending Dean Approval', 'Pending Registrar Approval', 'Approved', 'Correction Required')";
+    } else if (req.user.role === 'registrar' || req.user.role === 'vc') {
+      // Registrar can see all submitted
+      query += " AND p.workflow_status != 'Draft'";
+    }
+  } else if (status === 'All Records') {
+    // Master institutional roster (no status restriction)
+  } else if (status === 'Pending HOD') {
+    query += " AND p.workflow_status IN ('Pending HOD Approval', 'Submitted')";
+  } else if (status === 'Pending Dean') {
+    query += " AND p.workflow_status = 'Pending Dean Approval'";
+  } else if (status === 'Pending Registrar') {
+    query += " AND p.workflow_status = 'Pending Registrar Approval'";
+  } else if (status === 'Approved') {
+    query += " AND p.workflow_status = 'Approved'";
+  } else if (status === 'Correction Required') {
+    query += " AND p.workflow_status = 'Correction Required'";
+  } else if (status === 'Draft') {
+    // Explicitly requested drafts
+    query += " AND p.workflow_status = 'Draft'";
+  } else {
+    query += ' AND p.workflow_status = ?';
+    params.push(status);
   }
 
   if (search) {
@@ -420,6 +451,101 @@ router.post('/verify-action', verifyToken, requireRoles('hod', 'dean', 'registra
   );
 
   logAudit(req.user.id, req.user.email, role, `VERIFY_${action}`, 'staff_profiles', staff_id, `${actionMessage} Remarks: ${remarks}`, req);
+
+  // Send real-time multi-tier notification alerts
+  const deptInfo = db.prepare(`
+    SELECT d.name as dept_name, f.name as fac_name
+    FROM departments d
+    LEFT JOIN faculties f ON d.faculty_id = f.id
+    WHERE d.id = ?
+  `).get(profile.department_id);
+  const deptName = deptInfo ? deptInfo.dept_name : 'Department';
+  const facName = deptInfo ? deptInfo.fac_name : 'Faculty';
+
+  if (action === 'APPROVE') {
+    if (role === 'hod') {
+      // 1. Notify Dean
+      createNotification({
+        target_role: 'dean',
+        faculty_id: profile.faculty_id,
+        title: '🏛️ HOD-Endorsed Dossier Awaiting Dean Clearance',
+        message: `HOD (${req.user.full_name}) has evaluated and endorsed "${profile.full_name}" (${deptName}). Dossier is now pending your Level 2 Dean Clearance.`,
+        type: 'submission',
+        staff_profile_id: profile.id,
+        staff_name: profile.full_name,
+        department_name: deptName
+      });
+      // 2. Notify Faculty
+      createNotification({
+        user_id: profile.user_id,
+        title: '✅ HOD Level 1 Clearance Endorsed!',
+        message: `Head of Department (${req.user.full_name}) has evaluated and endorsed your dossier: "${remarks}". It is now routed to Dean of Faculty for Level 2 Clearance.`,
+        type: 'approval',
+        staff_profile_id: profile.id,
+        staff_name: profile.full_name,
+        department_name: deptName
+      });
+    } else if (role === 'dean') {
+      // 1. Notify Registrar
+      createNotification({
+        target_role: 'registrar',
+        title: '⭐ Dossier Awaiting Final University Seal',
+        message: `Dean (${req.user.full_name}) has approved "${profile.full_name}" from Department of ${deptName} (${facName}). Awaiting Registrar Final Certification & University Seal.`,
+        type: 'submission',
+        staff_profile_id: profile.id,
+        staff_name: profile.full_name,
+        department_name: deptName
+      });
+      // 2. Notify Faculty
+      createNotification({
+        user_id: profile.user_id,
+        title: '✅ Dean Level 2 Clearance Approved!',
+        message: `Dean of Faculty (${req.user.full_name}) has granted clearance: "${remarks}". Your file has reached the Office of the Registrar for Final University Seal.`,
+        type: 'approval',
+        staff_profile_id: profile.id,
+        staff_name: profile.full_name,
+        department_name: deptName
+      });
+    } else if (role === 'registrar' || role === 'hr' || role === 'vc') {
+      // 1. Notify Faculty
+      createNotification({
+        user_id: profile.user_id,
+        title: '🎉 Official University Seal Conferred!',
+        message: `The Registrar has officially granted clearance and sealed your 9-module staff dossier in permanent university archives. Remarks: "${remarks}".`,
+        type: 'approval',
+        staff_profile_id: profile.id,
+        staff_name: profile.full_name,
+        department_name: deptName
+      });
+      // 2. Notify HOD & Dean
+      createNotification({
+        target_role: 'hod',
+        department_id: profile.department_id,
+        title: '🏅 Official Clearance Conferred',
+        message: `Registrar has officially sealed and approved "${profile.full_name}" (${deptName}).`,
+        type: 'approval',
+        staff_profile_id: profile.id
+      });
+      createNotification({
+        target_role: 'dean',
+        faculty_id: profile.faculty_id,
+        title: '🏅 Official Clearance Conferred',
+        message: `Registrar has officially sealed and approved "${profile.full_name}" (${deptName}).`,
+        type: 'approval',
+        staff_profile_id: profile.id
+      });
+    }
+  } else if (action === 'CORRECTION_REQUIRED') {
+    createNotification({
+      user_id: profile.user_id,
+      title: `⚠️ Revision Requested by ${role.toUpperCase()}`,
+      message: `${req.user.full_name} (${role.toUpperCase()}) reviewed your dossier and requested corrections: "${remarks}". Please make necessary updates and re-submit for clearance.`,
+      type: 'warning',
+      staff_profile_id: profile.id,
+      staff_name: profile.full_name,
+      department_name: deptName
+    });
+  }
 
   res.json({
     message: actionMessage,

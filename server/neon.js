@@ -332,6 +332,23 @@ async function initNeonSchema() {
           ip_address TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- University Clearance Notifications
+        CREATE TABLE IF NOT EXISTS notifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER,
+          target_role TEXT,
+          department_id INTEGER,
+          faculty_id INTEGER,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          type TEXT DEFAULT 'info',
+          staff_profile_id INTEGER,
+          staff_name TEXT,
+          department_name TEXT,
+          is_read INTEGER DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
       `);
       isNeonConnected = true;
       console.log('✅ [Neon PostgreSQL]: Cloud database connected and schema verified successfully.');
