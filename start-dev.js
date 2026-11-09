@@ -20,11 +20,11 @@ if (os.platform() === 'win32') {
 console.log('  ➜ Backend Express Server : http://localhost:5000');
 console.log('  ➜ Frontend Vite Portal   : http://localhost:5173');
 console.log('----------------------------------------------------------------');
-console.log('  Default Passwords:');
-console.log('  • Faculty   : vinod@gmail.com                 (Vinod@123)');
-console.log('  • HOD (CSE) : hod.cse@chaitanya.edu.in        (Hod@123)');
-console.log('  • Dean (FET): dean.engineering@chaitanya.edu.in (Dean@123)');
-console.log('  • Registrar : registrar@chaitanya.edu.in      (Registrar@123)');
+console.log('  Official University Administrator Credentials:');
+console.log('  • Registrar : registrar@chaitanya.edu.in         (Registrar@Chaitanya2026)');
+console.log('  • Deans (12): dean.<faculty>@chaitanya.edu.in   (Dean@Chaitanya2026)');
+console.log('  • HODs (21) : hod.<dept>@chaitanya.edu.in       (Hod@<Code>2026!)');
+console.log('  • Real Faculty / Staff: Must create account via @chaitanya.edu.in');
 console.log('================================================================\n');
 
 const server = spawn('node', ['server/server.js'], {

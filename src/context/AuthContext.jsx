@@ -6,23 +6,12 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('sdrms_token') || null);
   const [loading, setLoading] = useState(true);
-  const [demoAccounts, setDemoAccounts] = useState([]);
   const [toast, setToast] = useState(null);
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4500);
   };
-
-  // Fetch demo accounts
-  useEffect(() => {
-    fetch('/api/auth/demo-accounts')
-      .then(res => res.json())
-      .then(data => {
-        if (data.accounts) setDemoAccounts(data.accounts);
-      })
-      .catch(err => console.error('Error fetching demo accounts:', err));
-  }, []);
 
   // Validate active token
   useEffect(() => {
@@ -49,24 +38,32 @@ export function AuthProvider({ children }) {
     }
   }, [token]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, portalRole = null) => {
     try {
+      const cleanEmail = typeof email === 'string' ? email.trim() : '';
+      const cleanPassword = typeof password === 'string' ? password : '';
+      const cleanPortalRole = typeof portalRole === 'string' ? portalRole : null;
+
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({
+          email: cleanEmail,
+          password: cleanPassword,
+          portalRole: cleanPortalRole
+        })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login failed');
+      if (!res.ok) throw new Error(data.error || 'Authentication failed');
 
       localStorage.setItem('sdrms_token', data.token);
       setToken(data.token);
       setUser(data.user);
       showToast(`Welcome back, ${data.user.full_name}!`, 'success');
-      return true;
+      return { success: true, user: data.user };
     } catch (err) {
       showToast(err.message, 'error');
-      return false;
+      return { success: false, error: err.message };
     }
   };
 
@@ -80,35 +77,12 @@ export function AuthProvider({ children }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Account creation failed');
 
-      localStorage.setItem('sdrms_token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-      showToast(data.message || `Welcome to Chaitanya University, ${data.user.full_name}!`, 'success');
-      return true;
+      // Do not auto-login. Faculty must sign in manually with their credentials.
+      showToast(data.message || 'Account created successfully! Please sign in with your password.', 'success');
+      return { success: true, message: data.message };
     } catch (err) {
       showToast(err.message, 'error');
-      return false;
-    }
-  };
-
-  const switchDemoRole = async (email) => {
-    try {
-      const res = await fetch('/api/auth/switch-demo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Demo switch failed');
-
-      localStorage.setItem('sdrms_token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-      showToast(`Switched active view to: ${data.user.full_name} (${data.user.role.toUpperCase()})`, 'info');
-      return true;
-    } catch (err) {
-      showToast(err.message, 'error');
-      return false;
+      return { success: false, error: err.message };
     }
   };
 
@@ -140,12 +114,10 @@ export function AuthProvider({ children }) {
         user,
         token,
         loading,
-        demoAccounts,
         toast,
         showToast,
         login,
         register,
-        switchDemoRole,
         refreshUser,
         logout
       }}

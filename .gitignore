@@ -7,6 +7,9 @@ database.sqlite
 uploads/*
 !uploads/.gitkeep
 .env
+.env.local
+ALL-PASSWORDS.pdf
+*.pdf
 .DS_Store
 *.log
 npm-debug.log*

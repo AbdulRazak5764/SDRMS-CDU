@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const { verifyToken, logAudit } = require('../auth');
+const { syncPublicationToNeon, syncBulkPublicationsToNeon } = require('../neon');
 
 // Helper to calculate completion percentage and omission checklist
 function calculateProfileStatus(profileId) {
@@ -20,7 +21,11 @@ function calculateProfileStatus(profileId) {
   if (profile.current_address) score += 5;
 
   // 2. Employment Details
-  if (profile.department_id) score += 10; else omissions.push({ section: 2, field: 'Department', text: 'Department selection is required' });
+  if (profile.employee_category === 'Teaching') {
+    if (profile.department_id) score += 10; else omissions.push({ section: 2, field: 'Department', text: 'Department selection is required' });
+  } else {
+    if (profile.administrative_unit || profile.designation) score += 10;
+  }
   if (profile.designation) score += 5;
   if (profile.employment_type) score += 5;
   if (profile.joining_date_university) score += 5;
@@ -150,7 +155,7 @@ router.get('/my-profile', verifyToken, (req, res) => {
   // Registrar info
   const registrar = db.prepare("SELECT full_name, email FROM users WHERE role = 'registrar' LIMIT 1").get();
   const assignedRegistrar = {
-    name: registrar ? registrar.full_name : 'Prof. M. Ravinder, M.Sc., Ph.D',
+    name: registrar ? registrar.full_name : 'Office of the Registrar',
     title: 'Registrar & Chief Academic Administrator',
     email: registrar ? registrar.email : 'registrar@chaitanya.edu.in'
   };
@@ -219,9 +224,25 @@ router.put('/my-profile', verifyToken, (req, res) => {
   const priorYears = parseFloat(b.relevant_previous_service_years || profile.relevant_previous_service_years || 0);
   const totalExp = parseFloat((calculatedUnivExp + priorYears).toFixed(1));
 
+  // Update users table if employee_id, full_name, or salutation changed
+  if (b.employee_id && b.employee_id.trim()) {
+    db.prepare('UPDATE users SET employee_id = ? WHERE id = ?').run(b.employee_id.trim(), req.user.id);
+  }
+  const effectiveSalutation = b.salutation !== undefined ? b.salutation : (profile.salutation || '');
+  const effectiveBaseName = b.full_name !== undefined ? b.full_name.trim() : (profile.full_name || '');
+  if (effectiveBaseName) {
+    const combinedFullName = [effectiveSalutation, effectiveBaseName].filter(Boolean).join(' ');
+    db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(combinedFullName, req.user.id);
+  }
+
   const stmt = db.prepare(`
     UPDATE staff_profiles SET
+      employee_id = COALESCE(?, employee_id),
       full_name = COALESCE(?, full_name),
+      salutation = COALESCE(?, salutation),
+      blood_group = COALESCE(?, blood_group),
+      social_category = COALESCE(?, social_category),
+      administrative_unit = COALESCE(?, administrative_unit),
       name_regional = COALESCE(?, name_regional),
       previous_name = COALESCE(?, previous_name),
       dob = COALESCE(?, dob),
@@ -282,7 +303,13 @@ router.put('/my-profile', verifyToken, (req, res) => {
   `);
 
   stmt.run(
-    b.full_name, b.name_regional, b.previous_name, b.dob, b.gender, b.marital_status, b.nationality,
+    b.employee_id,
+    b.full_name,
+    b.salutation !== undefined ? (b.salutation || null) : (b.title !== undefined ? (b.title || null) : null),
+    b.blood_group !== undefined ? (b.blood_group || null) : null,
+    b.social_category !== undefined ? (b.social_category || null) : null,
+    b.administrative_unit !== undefined ? (b.administrative_unit || null) : null,
+    b.name_regional, b.previous_name, b.dob, b.gender, b.marital_status, b.nationality,
     b.official_email, b.personal_email, b.mobile, b.alternate_contact,
     b.current_address, b.permanent_address, b.city, b.state, b.pincode, b.country,
     b.emergency_contact_name, b.emergency_contact_relationship, b.emergency_contact_phone,
@@ -364,13 +391,19 @@ router.post('/professional', verifyToken, (req, res) => {
   if (!profile) return res.status(404).json({ error: 'Profile not found.' });
 
   const { qualification_type, title_or_exam, qualifying_authority, registration_no, award_date, validity_date } = req.body;
-  if (!qualification_type || !title_or_exam) return res.status(400).json({ error: 'Qualification type and title are required.' });
+  if (!title_or_exam) return res.status(400).json({ error: 'Examination / accreditation title is required.' });
+
+  const qualType = (qualification_type && qualification_type.trim())
+    ? qualification_type.trim()
+    : ((title_or_exam.toLowerCase().includes('council') || title_or_exam.toLowerCase().includes('pharmacist') || title_or_exam.toLowerCase().includes('nurse') || title_or_exam.toLowerCase().includes('advocate'))
+        ? 'Statutory Council Registration'
+        : 'National / State Eligibility Test');
 
   const stmt = db.prepare(`
     INSERT INTO professional_qualifications (staff_id, qualification_type, title_or_exam, qualifying_authority, registration_no, award_date, validity_date)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  const info = stmt.run(profile.id, qualification_type, title_or_exam, qualifying_authority || '', registration_no || '', award_date || null, validity_date || null);
+  const info = stmt.run(profile.id, qualType, title_or_exam, qualifying_authority || '', registration_no || '', award_date || null, validity_date || null);
   res.json({ message: 'Professional qualification recorded.', id: info.lastInsertRowid });
 });
 
@@ -406,6 +439,125 @@ router.delete('/teaching-exp/:id', verifyToken, (req, res) => {
 });
 
 // Repeatable: Research Publications
+// Helper: Clean and extract standard DOI from URLs
+function extractDoi(raw) {
+  if (!raw) return '';
+  const match = raw.match(/10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+/);
+  return match ? match[0] : raw.trim();
+}
+
+// GET /api/staff/fetch-doi - Instant DOI metadata auto-fetch from official CrossRef registry
+router.get('/fetch-doi', verifyToken, async (req, res) => {
+  const rawDoi = req.query.doi;
+  if (!rawDoi) return res.status(400).json({ error: 'DOI is required.' });
+
+  const cleanDoi = extractDoi(rawDoi);
+  if (!cleanDoi) return res.status(400).json({ error: 'Invalid DOI format.' });
+
+  try {
+    const crossRefUrl = `https://api.crossref.org/works/${encodeURIComponent(cleanDoi)}`;
+    const response = await fetch(crossRefUrl, {
+      headers: {
+        'User-Agent': 'Chaitanya-University-SDRMS/1.0 (mailto:admin@chaitanya.edu.in)'
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(404).json({ error: `DOI not found on CrossRef registry (${cleanDoi}). Please check the number or enter manually.` });
+    }
+
+    const json = await response.json();
+    const m = json.message;
+
+    // Format authors
+    const authorsList = (m.author || []).map(a => {
+      const parts = [a.given, a.family].filter(Boolean);
+      return parts.join(' ');
+    }).filter(Boolean);
+    const authors = authorsList.join(', ');
+
+    // Format journal/conference name
+    const journalName = (m['container-title'] && m['container-title'][0]) || m.publisher || '';
+
+    // Format year
+    const yearParts = m['published-print']?.['date-parts']?.[0] || m['published-online']?.['date-parts']?.[0] || m.issued?.['date-parts']?.[0];
+    const year = yearParts && yearParts[0] ? parseInt(yearParts[0]) : (m.created?.['date-parts']?.[0]?.[0] || new Date().getFullYear());
+
+    // Auto-detect high-impact indexing
+    const publisherOrJournal = `${m.publisher || ''} ${journalName}`.toLowerCase();
+    let indexing = 'Peer Reviewed, UGC-CARE';
+    if (/ieee|elsevier|springer|nature|wiley|acm|mdpi|taylor & francis|oxford|cambridge|sage|science/i.test(publisherOrJournal)) {
+      indexing = 'Scopus, Web of Science, UGC-CARE';
+    } else if (/ugc|care|peer/i.test(publisherOrJournal)) {
+      indexing = 'UGC-CARE Listed';
+    }
+
+    res.json({
+      title: (m.title && m.title[0]) || '',
+      authors: authors || '',
+      journal_or_conf_name: journalName,
+      publication_year: year,
+      volume: m.volume || '',
+      issue: m.issue || '',
+      page_numbers: m.page || m['article-number'] || '',
+      doi: m.DOI || cleanDoi,
+      url: m.URL || `https://doi.org/${cleanDoi}`,
+      indexing,
+      publisher: m.publisher || ''
+    });
+  } catch (err) {
+    console.error('CrossRef fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to connect to CrossRef registry. Please check your network or enter details manually.' });
+  }
+});
+
+// POST /api/staff/bulk-publications - Import multiple papers at once (for 80+ papers)
+router.post('/bulk-publications', verifyToken, (req, res) => {
+  const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
+  if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+
+  const { publications } = req.body;
+  if (!Array.isArray(publications) || publications.length === 0) {
+    return res.status(400).json({ error: 'Valid array of publications required.' });
+  }
+
+  const stmt = db.prepare(`
+    INSERT INTO research_publications (staff_id, title, authors, journal_or_conf_name, publication_year, volume, issue, page_numbers, doi, indexing, url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  let addedCount = 0;
+  const insertMany = db.transaction((papers) => {
+    for (const p of papers) {
+      if (p.title && p.journal_or_conf_name) {
+        stmt.run(
+          profile.id,
+          p.title,
+          p.authors || 'Self',
+          p.journal_or_conf_name,
+          p.publication_year ? parseInt(p.publication_year) : null,
+          p.volume || '',
+          p.issue || '',
+          p.page_numbers || '',
+          p.doi || '',
+          p.indexing || 'Scopus, Web of Science',
+          p.url || ''
+        );
+        addedCount++;
+      }
+    }
+  });
+
+  insertMany(publications);
+
+  // Sync to Neon PostgreSQL in real-time
+  syncBulkPublicationsToNeon(publications, req.user.employee_id).catch(err => {
+    console.error('Neon bulk publications sync error:', err.message);
+  });
+
+  res.json({ message: `Successfully imported ${addedCount} research publications.`, count: addedCount });
+});
+
 router.post('/publication', verifyToken, (req, res) => {
   const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(req.user.id);
   if (!profile) return res.status(404).json({ error: 'Profile not found.' });
@@ -418,6 +570,22 @@ router.post('/publication', verifyToken, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = stmt.run(profile.id, title, authors, journal_or_conf_name, publication_year ? parseInt(publication_year) : null, volume || '', issue || '', page_numbers || '', doi || '', indexing || '', url || '');
+
+  // Sync to Neon PostgreSQL in real-time
+  syncPublicationToNeon({
+    staff_id: profile.id,
+    title,
+    authors,
+    journal_or_conf_name,
+    publication_year,
+    volume,
+    issue,
+    page_numbers,
+    doi,
+    indexing,
+    url
+  }, req.user.employee_id).catch(err => console.error('Neon pub sync error:', err.message));
+
   res.json({ message: 'Publication recorded.', id: info.lastInsertRowid });
 });
 

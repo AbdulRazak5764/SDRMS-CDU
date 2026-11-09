@@ -1,39 +1,157 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, Upload, User, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { INDIAN_STATES_AND_UTS, STATE_DISTRICTS_MAP } from '../../data/indiaLocations';
 
-export default function Section1Personal({ profile, onSaveDraft, onRefreshData, isLocked }) {
+function SelectWithOther({ label, name, value, onChange, options = [], disabled, required, placeholder = 'Select...' }) {
+  const isPredefined = options.includes(value);
+  const [showOtherInput, setShowOtherInput] = useState(!isPredefined && Boolean(value));
+
+  useEffect(() => {
+    if (options.includes(value)) {
+      setShowOtherInput(false);
+    } else if (value && value !== '') {
+      setShowOtherInput(true);
+    }
+  }, [value, options]);
+
+  const handleSelectChange = (e) => {
+    const val = e.target.value;
+    if (val === 'Others') {
+      setShowOtherInput(true);
+      onChange({ target: { name, value: '' } });
+    } else {
+      setShowOtherInput(false);
+      onChange({ target: { name, value: val } });
+    }
+  };
+
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-700 mb-1">
+        {label} {required && <span className="text-rose-500">*</span>}
+      </label>
+      <select
+        name={name}
+        disabled={disabled}
+        value={showOtherInput ? 'Others' : (value || '')}
+        onChange={handleSelectChange}
+        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+        required={required && !showOtherInput}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+        <option value="Others">Others (Type manually)</option>
+      </select>
+      {showOtherInput && (
+        <input
+          type="text"
+          name={name}
+          disabled={disabled}
+          value={value || ''}
+          onChange={onChange}
+          placeholder={`Please type ${label.toLowerCase()}...`}
+          className="w-full mt-1.5 bg-slate-50 border border-blue-400 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+          required={required}
+          autoFocus
+        />
+      )}
+    </div>
+  );
+}
+
+export default function Section1Personal({ profile, onSaveDraft, onRefreshData, onLiveUpdate, isLocked }) {
   const { showToast } = useAuth();
   const [formData, setFormData] = useState({
+    employee_id: profile.employee_id || '',
     full_name: profile.full_name || '',
+    salutation: profile.salutation || '',
     name_regional: profile.name_regional || '',
     previous_name: profile.previous_name || '',
-    dob: profile.dob || '1985-05-15',
-    gender: profile.gender || 'Male',
-    marital_status: profile.marital_status || 'Married',
+    dob: profile.dob || '',
+    gender: profile.gender || '',
+    blood_group: profile.blood_group || '',
+    marital_status: profile.marital_status || '',
     nationality: profile.nationality || 'Indian',
+    social_category: profile.social_category || '',
     official_email: profile.official_email || '',
     personal_email: profile.personal_email || '',
     mobile: profile.mobile || '',
     alternate_contact: profile.alternate_contact || '',
-    current_address: profile.current_address || 'Flat 402, Sri Sai Residency, Hanamkonda',
-    permanent_address: profile.permanent_address || 'Flat 402, Sri Sai Residency, Hanamkonda',
-    city: profile.city || 'Warangal',
-    state: profile.state || 'Telangana',
-    pincode: profile.pincode || '506001',
+    current_address: profile.current_address || '',
+    permanent_address: profile.permanent_address || '',
+    city: profile.city || '',
+    state: profile.state || '',
+    pincode: profile.pincode || '',
     country: profile.country || 'India',
     emergency_contact_name: profile.emergency_contact_name || '',
-    emergency_contact_relationship: profile.emergency_contact_relationship || 'Spouse',
+    emergency_contact_relationship: profile.emergency_contact_relationship || '',
     emergency_contact_phone: profile.emergency_contact_phone || ''
   });
 
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(profile.photo_url || null);
 
+  useEffect(() => {
+    if (profile) {
+      setFormData(prev => ({
+        ...prev,
+        employee_id: profile.employee_id ?? prev.employee_id ?? '',
+        full_name: profile.full_name ?? prev.full_name ?? '',
+        salutation: profile.salutation || profile.title || prev.salutation || '',
+        name_regional: profile.name_regional ?? prev.name_regional ?? '',
+        previous_name: profile.previous_name ?? prev.previous_name ?? '',
+        dob: profile.dob ?? prev.dob ?? '',
+        gender: profile.gender ?? prev.gender ?? '',
+        blood_group: profile.blood_group ?? prev.blood_group ?? '',
+        marital_status: profile.marital_status ?? prev.marital_status ?? '',
+        nationality: profile.nationality ?? prev.nationality ?? 'Indian',
+        social_category: profile.social_category ?? prev.social_category ?? '',
+        official_email: profile.official_email ?? prev.official_email ?? '',
+        personal_email: profile.personal_email ?? prev.personal_email ?? '',
+        mobile: profile.mobile ?? prev.mobile ?? '',
+        alternate_contact: profile.alternate_contact ?? prev.alternate_contact ?? '',
+        current_address: profile.current_address ?? prev.current_address ?? '',
+        permanent_address: profile.permanent_address ?? prev.permanent_address ?? '',
+        city: profile.city ?? prev.city ?? '',
+        state: profile.state ?? prev.state ?? '',
+        pincode: profile.pincode ?? prev.pincode ?? '',
+        country: profile.country ?? prev.country ?? 'India',
+        emergency_contact_name: profile.emergency_contact_name ?? prev.emergency_contact_name ?? '',
+        emergency_contact_relationship: profile.emergency_contact_relationship ?? prev.emergency_contact_relationship ?? '',
+        emergency_contact_phone: profile.emergency_contact_phone ?? prev.emergency_contact_phone ?? ''
+      }));
+      if (profile.photo_url) {
+        setPhotoPreview(profile.photo_url);
+      }
+    }
+  }, [profile]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (onLiveUpdate && (name === 'full_name' || name === 'salutation' || name === 'employee_id')) {
+      onLiveUpdate({ [name]: value });
+    }
   };
+
+  const handleStateChange = (e) => {
+    const newState = e.target.value;
+    const availableDists = STATE_DISTRICTS_MAP[newState] || [];
+    setFormData(prev => ({
+      ...prev,
+      state: newState,
+      city: availableDists.includes(prev.city) ? prev.city : ''
+    }));
+  };
+
+  const currentDistricts = formData.state && STATE_DISTRICTS_MAP[formData.state]
+    ? STATE_DISTRICTS_MAP[formData.state]
+    : [];
 
   const handleCopyAddress = (e) => {
     if (e.target.checked) {
@@ -74,6 +192,9 @@ export default function Section1Personal({ profile, onSaveDraft, onRefreshData, 
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || 'Photo upload failed');
       showToast('Passport photograph updated securely.', 'success');
+      if (onLiveUpdate && (resData.photo_url || resData.url)) {
+        onLiveUpdate({ photo_url: resData.photo_url || resData.url });
+      }
       onRefreshData();
     } catch (err) {
       showToast(err.message, 'error');
@@ -145,13 +266,17 @@ export default function Section1Personal({ profile, onSaveDraft, onRefreshData, 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                University Employee ID (Assigned by HR)
+                University Employee ID <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
-                disabled
-                value={profile.employee_id || 'Generating...'}
-                className="w-full bg-slate-100 border border-slate-300 text-slate-600 rounded-lg px-3 py-2 text-sm font-mono font-semibold cursor-not-allowed"
+                name="employee_id"
+                disabled={isLocked}
+                value={formData.employee_id}
+                onChange={handleChange}
+                placeholder="Enter Employee ID (e.g. CDU-1042)"
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                required
               />
               <span className="text-[11px] text-slate-500">Official institutional employee code</span>
             </div>
@@ -183,7 +308,7 @@ export default function Section1Personal({ profile, onSaveDraft, onRefreshData, 
       <div className="space-y-4">
         <h3 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-2 flex items-center justify-between">
           <span>A. Primary Demographic & Identity Details</span>
-          <span className="text-xs text-blue-600 font-semibold">Select via Standard Dropdowns</span>
+          <span className="text-xs text-blue-600 font-semibold">Select via Standard Dropdowns or Type Custom</span>
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -197,29 +322,22 @@ export default function Section1Personal({ profile, onSaveDraft, onRefreshData, 
               disabled={isLocked}
               value={formData.full_name}
               onChange={handleChange}
-              placeholder="e.g. Dr. Sirikonda Vinod"
+              placeholder=""
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
               required
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Title / Salutation <span className="text-rose-500">*</span>
-            </label>
-            <select
-              disabled={isLocked}
-              name="salutation"
-              defaultValue="Dr."
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="Dr.">Dr.</option>
-              <option value="Prof.">Prof.</option>
-              <option value="Mr.">Mr.</option>
-              <option value="Ms.">Ms.</option>
-              <option value="Mrs.">Mrs.</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="Title / Salutation"
+            name="salutation"
+            value={formData.salutation}
+            onChange={handleChange}
+            options={['Dr.', 'Prof.', 'Mr.', 'Ms.', 'Mrs.']}
+            disabled={isLocked}
+            required
+            placeholder="Select Title..."
+          />
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -238,105 +356,61 @@ export default function Section1Personal({ profile, onSaveDraft, onRefreshData, 
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Gender <span className="text-rose-500">*</span>
-            </label>
-            <select
-              name="gender"
-              disabled={isLocked}
-              value={formData.gender}
-              onChange={handleChange}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-              required
-            >
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-              <option value="Decline to state">Decline to state</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="Gender"
+            name="gender"
+            value={formData.gender}
+            onChange={handleChange}
+            options={['Male', 'Female', 'Transgender']}
+            disabled={isLocked}
+            required
+            placeholder="Select Gender..."
+          />
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Blood Group <span className="text-rose-500">*</span>
-            </label>
-            <select
-              name="blood_group"
-              disabled={isLocked}
-              defaultValue="O+"
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="O+">O Positive (O+)</option>
-              <option value="O-">O Negative (O-)</option>
-              <option value="A+">A Positive (A+)</option>
-              <option value="A-">A Negative (A-)</option>
-              <option value="B+">B Positive (B+)</option>
-              <option value="B-">B Negative (B-)</option>
-              <option value="AB+">AB Positive (AB+)</option>
-              <option value="AB-">AB Negative (AB-)</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="Blood Group"
+            name="blood_group"
+            value={formData.blood_group}
+            onChange={handleChange}
+            options={['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-']}
+            disabled={isLocked}
+            required
+            placeholder="Select Blood Group..."
+          />
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Marital Status <span className="text-rose-500">*</span>
-            </label>
-            <select
-              name="marital_status"
-              disabled={isLocked}
-              value={formData.marital_status}
-              onChange={handleChange}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="Married">Married</option>
-              <option value="Single">Single</option>
-              <option value="Divorced">Divorced</option>
-              <option value="Widowed">Widowed</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="Marital Status"
+            name="marital_status"
+            value={formData.marital_status}
+            onChange={handleChange}
+            options={['Single', 'Married', 'Divorced', 'Widowed']}
+            disabled={isLocked}
+            required
+            placeholder="Select Marital Status..."
+          />
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Nationality <span className="text-rose-500">*</span>
-            </label>
-            <select
-              name="nationality"
-              disabled={isLocked}
-              value={formData.nationality}
-              onChange={handleChange}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="Indian">Indian</option>
-              <option value="NRI">Non-Resident Indian (NRI)</option>
-              <option value="OCI">Overseas Citizen of India (OCI)</option>
-              <option value="Foreign National">Foreign National</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="Nationality"
+            name="nationality"
+            value={formData.nationality}
+            onChange={handleChange}
+            options={['Indian', 'NRI', 'OCI', 'Foreign National']}
+            disabled={isLocked}
+            required
+            placeholder="Select Nationality..."
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Social Category (for Statutory Compliance)
-            </label>
-            <select
-              name="social_category"
-              disabled={isLocked}
-              defaultValue="OC / General"
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="OC / General">OC / General Category</option>
-              <option value="BC-A">Backward Class Group A (BC-A)</option>
-              <option value="BC-B">Backward Class Group B (BC-B)</option>
-              <option value="BC-C">Backward Class Group C (BC-C)</option>
-              <option value="BC-D">Backward Class Group D (BC-D)</option>
-              <option value="BC-E">Backward Class Group E (BC-E)</option>
-              <option value="SC">Scheduled Caste (SC)</option>
-              <option value="ST">Scheduled Tribe (ST)</option>
-              <option value="EWS">Economically Weaker Section (EWS)</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="Social Category"
+            name="social_category"
+            value={formData.social_category}
+            onChange={handleChange}
+            options={['OC / General', 'BC-A', 'BC-B', 'BC-C', 'BC-D', 'BC-E', 'SC', 'ST', 'EWS']}
+            disabled={isLocked}
+            placeholder="Select Category..."
+          />
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -424,52 +498,27 @@ export default function Section1Personal({ profile, onSaveDraft, onRefreshData, 
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              State <span className="text-rose-500">*</span>
-            </label>
-            <select
-              name="state"
-              disabled={isLocked}
-              value={formData.state}
-              onChange={handleChange}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="Telangana">Telangana</option>
-              <option value="Andhra Pradesh">Andhra Pradesh</option>
-              <option value="Karnataka">Karnataka</option>
-              <option value="Tamil Nadu">Tamil Nadu</option>
-              <option value="Maharashtra">Maharashtra</option>
-              <option value="Kerala">Kerala</option>
-              <option value="Delhi">Delhi</option>
-              <option value="Other">Other State</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="State"
+            name="state"
+            value={formData.state}
+            onChange={handleStateChange}
+            options={INDIAN_STATES_AND_UTS}
+            disabled={isLocked}
+            required
+            placeholder="Select State / UT..."
+          />
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              City / District <span className="text-rose-500">*</span>
-            </label>
-            <select
-              name="city"
-              disabled={isLocked}
-              value={formData.city}
-              onChange={handleChange}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="Hyderabad">Hyderabad</option>
-              <option value="Warangal">Warangal</option>
-              <option value="Hanamkonda">Hanamkonda</option>
-              <option value="Karimnagar">Karimnagar</option>
-              <option value="Nizamabad">Nizamabad</option>
-              <option value="Secunderabad">Secunderabad</option>
-              <option value="Khammam">Khammam</option>
-              <option value="Visakhapatnam">Visakhapatnam</option>
-              <option value="Vijayawada">Vijayawada</option>
-              <option value="Bengaluru">Bengaluru</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="City / District"
+            name="city"
+            value={formData.city}
+            onChange={handleChange}
+            options={currentDistricts}
+            disabled={isLocked}
+            required
+            placeholder={formData.state ? `Select District in ${formData.state}...` : 'Select State first...'}
+          />
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -487,25 +536,25 @@ export default function Section1Personal({ profile, onSaveDraft, onRefreshData, 
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Country <span className="text-rose-500">*</span>
-            </label>
-            <select
-              name="country"
-              disabled={isLocked}
-              value={formData.country}
-              onChange={handleChange}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="India">India</option>
-              <option value="USA">USA</option>
-              <option value="UK">UK</option>
-              <option value="UAE">UAE</option>
-              <option value="Australia">Australia</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="Country"
+            name="country"
+            value={formData.country}
+            onChange={handleChange}
+            options={[
+              'India',
+              'United States',
+              'United Kingdom',
+              'United Arab Emirates',
+              'Australia',
+              'Canada',
+              'Germany',
+              'Singapore'
+            ]}
+            disabled={isLocked}
+            required
+            placeholder="Select Country..."
+          />
         </div>
       </div>
 
@@ -531,26 +580,24 @@ export default function Section1Personal({ profile, onSaveDraft, onRefreshData, 
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Relationship
-            </label>
-            <select
-              name="emergency_contact_relationship"
-              disabled={isLocked}
-              value={formData.emergency_contact_relationship}
-              onChange={handleChange}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="Spouse">Spouse</option>
-              <option value="Father">Father</option>
-              <option value="Mother">Mother</option>
-              <option value="Brother">Brother</option>
-              <option value="Sister">Sister</option>
-              <option value="Guardian">Guardian</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
+          <SelectWithOther
+            label="Relationship"
+            name="emergency_contact_relationship"
+            value={formData.emergency_contact_relationship}
+            onChange={handleChange}
+            options={[
+              'Spouse',
+              'Father',
+              'Mother',
+              'Brother',
+              'Sister',
+              'Son',
+              'Daughter',
+              'Guardian'
+            ]}
+            disabled={isLocked}
+            placeholder="Select Relationship..."
+          />
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -574,10 +621,10 @@ export default function Section1Personal({ profile, onSaveDraft, onRefreshData, 
         <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
           <button
             type="submit"
-            className="px-6 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors flex items-center gap-2"
+            className="px-6 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
           >
             <Check className="w-4 h-4" />
-            <span>Save Module 1 Personal Details</span>
+            <span>Save & Proceed to Module 2 (Cadre & Service) →</span>
           </button>
         </div>
       )}

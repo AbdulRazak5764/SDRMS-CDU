@@ -7,19 +7,27 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({
-    institution_name: 'Chaitanya (Deemed to be University), Hyderabad',
-    designation_held: 'Assistant Professor',
-    department: 'Computer Science & Engineering',
-    institution_type: 'Deemed to be University',
+  const emptyForm = {
+    institution_name: '',
+    designation_held: '',
+    department: '',
+    institution_type: '',
     employment_type: 'Full-time Regular',
-    start_date: '2018-07-02',
+    start_date: '',
     end_date: '',
-    is_current: 1,
+    is_current: 0,
     full_or_part_time: 'Full-time',
-    subjects_taught: 'Data Structures & Algorithms, Machine Learning, Operating Systems',
-    teaching_involvement: 'Undergraduate (UG) & Postgraduate (PG)'
-  });
+    subjects_taught: '',
+    custom_subjects: '',
+    teaching_involvement: ''
+  };
+
+  const [form, setForm] = useState(emptyForm);
+
+  const openModal = () => {
+    setForm(emptyForm);
+    setShowModal(true);
+  };
 
   const designationOptions = [
     'Assistant Professor', 'Associate Professor', 'Professor', 'Professor of Practice',
@@ -57,6 +65,24 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
 
   const handleAdd = async (e) => {
     e.preventDefault();
+    if (!form.designation_held) {
+      showToast('Please select your designation held.', 'error');
+      return;
+    }
+    if (!form.institution_type) {
+      showToast('Please select the institution type.', 'error');
+      return;
+    }
+    if (!form.teaching_involvement) {
+      showToast('Please select teaching involvement level.', 'error');
+      return;
+    }
+    const finalSubjects = form.subjects_taught === 'Other' ? form.custom_subjects : form.subjects_taught;
+    if (!finalSubjects) {
+      showToast('Please select or specify subjects taught.', 'error');
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch('/api/staff/teaching-exp', {
@@ -65,7 +91,10 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('sdrms_token')}`
         },
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          ...form,
+          subjects_taught: finalSubjects
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to add teaching experience');
@@ -110,7 +139,7 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
         {!isLocked && (
           <button
             type="button"
-            onClick={() => setShowModal(true)}
+            onClick={openModal}
             className="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
@@ -187,7 +216,7 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
           {!isLocked && (
             <button
               type="button"
-              onClick={() => setShowModal(true)}
+              onClick={openModal}
               className="mt-2 px-5 py-2 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-all shadow-sm"
             >
               Add Teaching Experience
@@ -230,7 +259,9 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
                     value={form.designation_held}
                     onChange={handleChange}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-semibold"
+                    required
                   >
+                    <option value="">Select Designation Held...</option>
                     {designationOptions.map(des => (
                       <option key={des} value={des}>{des}</option>
                     ))}
@@ -246,7 +277,9 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
                     value={form.institution_type}
                     onChange={handleChange}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-medium"
+                    required
                   >
+                    <option value="">Select Institution Type...</option>
                     {instTypeOptions.map(t => (
                       <option key={t} value={t}>{t}</option>
                     ))}
@@ -263,7 +296,7 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
                   name="institution_name"
                   value={form.institution_name}
                   onChange={handleChange}
-                  placeholder="e.g. Chaitanya (Deemed to be University), Hyderabad"
+                  placeholder="Enter College or University Name..."
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                   required
                 />
@@ -321,11 +354,26 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
                   value={form.subjects_taught}
                   onChange={handleChange}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-medium"
+                  required
                 >
+                  <option value="">Select Subjects Taught / Course Specialization...</option>
                   {streamOptions.map(st => (
                     <option key={st} value={st}>{st}</option>
                   ))}
+                  <option value="Other">Other (Specify manually)...</option>
                 </select>
+                {form.subjects_taught === 'Other' && (
+                  <input
+                    type="text"
+                    name="custom_subjects"
+                    value={form.custom_subjects}
+                    onChange={handleChange}
+                    placeholder="Type subjects taught (e.g. Data Structures, Web Technologies)..."
+                    className="w-full mt-2 bg-white border border-blue-400 rounded-lg px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500"
+                    required
+                    autoFocus
+                  />
+                )}
               </div>
 
               <div>
@@ -337,7 +385,9 @@ export default function Section5TeachingExp({ teachingExp = [], onRefreshData, i
                   value={form.teaching_involvement}
                   onChange={handleChange}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
+                  required
                 >
+                  <option value="">Select Teaching Level (UG / PG / Both)...</option>
                   <option value="Undergraduate (UG) Only">Undergraduate (UG) Only</option>
                   <option value="Postgraduate (PG) Only">Postgraduate (PG) Only</option>
                   <option value="Undergraduate (UG) & Postgraduate (PG)">Undergraduate (UG) & Postgraduate (PG)</option>

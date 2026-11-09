@@ -1,7 +1,15 @@
+require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const { db } = require('./db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'chaitanya-university-sdrms-secure-secret-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: JWT_SECRET environment variable is missing in production environment.');
+  }
+  console.warn('[SECURITY WARNING]: JWT_SECRET is not set in .env. Using development secret.');
+}
+const ACTIVE_JWT_SECRET = JWT_SECRET || 'chaitanya-university-dev-secret-key-2026';
 
 function generateToken(user) {
   return jwt.sign(
@@ -15,7 +23,7 @@ function generateToken(user) {
       faculty_id: user.faculty_id,
       category: user.category
     },
-    JWT_SECRET,
+    ACTIVE_JWT_SECRET,
     { expiresIn: '24h' }
   );
 }
@@ -28,7 +36,7 @@ function verifyToken(req, res, next) {
 
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, ACTIVE_JWT_SECRET);
     req.user = decoded;
     next();
   } catch (err) {

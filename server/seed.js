@@ -2,7 +2,9 @@ const bcrypt = require('bcryptjs');
 const { db } = require('./db');
 
 function seedDatabase() {
-  console.log('Seeding Chaitanya (Deemed to be University) SDRMS database...');
+  console.log('===============================================================');
+  console.log('Chaitanya (Deemed to be University) — SDRMS Program-Wise HOD Seeder');
+  console.log('===============================================================');
 
   const hashPassword = (pw) => bcrypt.hashSync(pw, 10);
 
@@ -16,25 +18,25 @@ function seedDatabase() {
   insertSetting.run('university_location', 'Hyderabad, Telangana, India', 'Location of administrative headquarters');
   insertSetting.run('university_status', 'Deemed to be University', 'Accreditation status');
   insertSetting.run('logo_url', '/assets/chaitanya-crest.jpg', 'Custom institutional logo URL');
-  insertSetting.run('max_doc_size_mb', '5', 'Max document file upload size in MB');
-  insertSetting.run('max_photo_size_mb', '2', 'Max staff photo upload size in MB');
+  insertSetting.run('max_doc_size_mb', '10', 'Max document file upload size in MB');
+  insertSetting.run('max_photo_size_mb', '5', 'Max staff photo upload size in MB');
   insertSetting.run('allowed_doc_types', 'pdf,jpg,jpeg,png', 'Allowed document file extensions');
 
-  // 2. Faculties / Administrative Deanships (12 Deans as requested by user)
+  // 2. Faculties / Academic Divisions (Deans)
   const faculties = [
-    { name: 'Faculty of Engineering and Technology', code: 'FET', dean_name: 'Dr. Jagadeeshwar Madiraju', dean_title: 'Dean, Faculty of Engineering & Technology' },
-    { name: 'Faculty of Science', code: 'FS', dean_name: 'Prof. S. Kavitha', dean_title: 'Dean, Science' },
-    { name: 'Faculty of Pharmacy', code: 'FPH', dean_name: 'Dr. G. Kumaraswamy', dean_title: 'Dean, Department of Pharmacy' },
-    { name: 'Faculty of Nursing', code: 'FNU', dean_name: 'Dr. Sunitha Chinnam', dean_title: 'Dean, Faculty of Nursing' },
-    { name: 'Faculty of Agriculture', code: 'FAG', dean_name: 'Dr. D. Dev Kumar', dean_title: 'Dean, Faculty of Agriculture' },
-    { name: 'Faculty of Commerce and Business Management', code: 'FCBM', dean_name: 'Dr. Pagadala Suganda Devi', dean_title: 'Dean, Faculty of Commerce & Business Management' },
-    { name: 'Academic Affairs', code: 'ACAD', dean_name: 'Prof. B. S. Anuradha', dean_title: 'Professor & Dean – Academic Affairs' },
-    { name: 'University Administration', code: 'ADMIN', dean_name: 'Dr. Amireddy Raju', dean_title: 'Dean, Administration' },
-    { name: 'Research & Development', code: 'RD', dean_name: 'Dr. T Christopher Reuben', dean_title: 'Dean, Research & Development' },
-    { name: 'Admissions Division', code: 'ADMIS', dean_name: 'Dr. Ch. Prathyusha Reddy', dean_title: 'Dean, Admissions' },
-    { name: 'Faculty of Science (Division II)', code: 'FS2', dean_name: 'Dr. B. Sreelatha', dean_title: 'Dean, Faculty of Science' },
-    { name: 'Examination Branch', code: 'EXAM', dean_name: 'Prof. B. Rajender Reddy', dean_title: 'Controller of Examinations' },
-    { name: 'Faculty of Allied Health Sciences', code: 'FAHS', dean_name: 'Dr. S. Ramesh', dean_title: 'Dean, Allied Health Sciences' }
+    { name: 'Faculty of Engineering and Technology', code: 'FET', dean_name: 'Dean, Faculty of Engineering & Technology', dean_title: 'Dean, Faculty of Engineering & Technology' },
+    { name: 'Faculty of Science', code: 'FS', dean_name: 'Dean, Faculty of Science', dean_title: 'Dean, Science' },
+    { name: 'Faculty of Pharmacy', code: 'FPH', dean_name: 'Dean, Faculty of Pharmacy', dean_title: 'Dean, Department of Pharmacy' },
+    { name: 'Faculty of Nursing', code: 'FNU', dean_name: 'Dean, Faculty of Nursing', dean_title: 'Dean, Faculty of Nursing' },
+    { name: 'Faculty of Agriculture', code: 'FAG', dean_name: 'Dean, Faculty of Agriculture', dean_title: 'Dean, Faculty of Agriculture' },
+    { name: 'Faculty of Commerce and Business Management', code: 'FCBM', dean_name: 'Dean, Faculty of Commerce & Business Management', dean_title: 'Dean, Faculty of Commerce & Business Management' },
+    { name: 'Academic Affairs', code: 'ACAD', dean_name: 'Dean, Academic Affairs', dean_title: 'Professor & Dean – Academic Affairs' },
+    { name: 'University Administration', code: 'ADMIN', dean_name: 'Dean, Administration', dean_title: 'Dean, Administration' },
+    { name: 'Research & Development', code: 'RD', dean_name: 'Dean, Research & Development', dean_title: 'Dean, Research & Development' },
+    { name: 'Admissions Division', code: 'ADMIS', dean_name: 'Dean, Admissions', dean_title: 'Dean, Admissions' },
+    { name: 'Faculty of Science (Division II)', code: 'FS2', dean_name: 'Dean, Faculty of Science (Division II)', dean_title: 'Dean, Faculty of Science' },
+    { name: 'Examination Branch', code: 'EXAM', dean_name: 'Controller of Examinations', dean_title: 'Controller of Examinations' },
+    { name: 'Faculty of Allied Health Sciences', code: 'FAHS', dean_name: 'Dean, Faculty of Allied Health Sciences', dean_title: 'Dean, Allied Health Sciences' }
   ];
 
   const insertFaculty = db.prepare(`
@@ -47,103 +49,264 @@ function seedDatabase() {
   `);
   faculties.forEach(f => insertFaculty.run(f.name, f.code, f.dean_name, f.dean_title));
 
-  // Map faculties
   const facultyMap = {};
   db.prepare('SELECT id, name, code FROM faculties').all().forEach(f => {
     facultyMap[f.name] = f.id;
     facultyMap[f.code] = f.id;
   });
 
-  // 3. Departments mapped to Faculties (11 Official Departments as requested)
-  const departments = [
-    { name: 'Department of Engineering', code: 'ENG', faculty: 'Faculty of Engineering and Technology', hod: 'Dr. K. V. S. Sharma' },
-    { name: 'Department of Science', code: 'SCI', faculty: 'Faculty of Science', hod: 'Dr. K. Lakshmi' },
-    { name: 'Department of Pharmacy', code: 'PHARM', faculty: 'Faculty of Pharmacy', hod: 'Dr. V. Rajesh' },
-    { name: 'Department of Allied Health Sciences', code: 'AHS', faculty: 'Faculty of Allied Health Sciences', hod: 'Dr. P. Kishore' },
-    { name: 'Department of Nursing', code: 'NURS', faculty: 'Faculty of Nursing', hod: 'Prof. Mary Thomas' },
-    { name: 'Department of Agriculture', code: 'AGRI', faculty: 'Faculty of Agriculture', hod: 'Dr. C. H. Venkat' },
-    { name: 'Department of Commerce and Business Management', code: 'CBM', faculty: 'Faculty of Commerce and Business Management', hod: 'Dr. A. Sridhar' },
-    { name: 'Department of Computer Applications', code: 'MCA', faculty: 'Faculty of Engineering and Technology', hod: 'Dr. P. Sreedhar' },
-    { name: 'Department of Clinical Embryology & ART', code: 'CEART', faculty: 'Faculty of Allied Health Sciences', hod: 'Dr. K. Swathi' },
-    { name: 'Department of Humanities & Science', code: 'HS', faculty: 'Academic Affairs', hod: 'Dr. G. Prasad' },
-    { name: 'Department of Research (Ph.D.)', code: 'RES-PHD', faculty: 'Research & Development', hod: 'Dr. T. Satish' }
+  // 3. Program-Wise Departments from handwritten list (No personal names)
+  const PROGRAM_DEPARTMENTS = [
+    // 1. Undergraduate – Engineering
+    {
+      name: 'Department of Computer Science & Engineering',
+      code: 'CSE',
+      facultyCode: 'FET',
+      hodTitle: 'Head of Department (CSE)',
+      hodEmail: 'hod.cse@chaitanya.edu.in',
+      hodPassword: 'Hod@CSE2026!',
+      programs: 'B.Tech. CSE, B.Tech. CSE (AIML), B.Tech. CSE (Data Science)'
+    },
+    {
+      name: 'Department of Electronics & Communication Engineering',
+      code: 'ECE',
+      facultyCode: 'FET',
+      hodTitle: 'Head of Department (ECE)',
+      hodEmail: 'hod.ece@chaitanya.edu.in',
+      hodPassword: 'Hod@ECE2026!',
+      programs: 'B.Tech. Electronics and Communication Engineering'
+    },
+    {
+      name: 'Department of Electrical & Electronics Engineering',
+      code: 'EEE',
+      facultyCode: 'FET',
+      hodTitle: 'Head of Department (EEE)',
+      hodEmail: 'hod.eee@chaitanya.edu.in',
+      hodPassword: 'Hod@EEE2026!',
+      programs: 'B.Tech. Electrical & Electronics Engineering'
+    },
+    {
+      name: 'Department of Mechanical Engineering',
+      code: 'ME',
+      facultyCode: 'FET',
+      hodTitle: 'Head of Department (Mechanical Engineering)',
+      hodEmail: 'hod.me@chaitanya.edu.in',
+      hodPassword: 'Hod@ME2026!',
+      programs: 'B.Tech. Mechanical Engineering'
+    },
+    {
+      name: 'Department of Civil Engineering',
+      code: 'CE',
+      facultyCode: 'FET',
+      hodTitle: 'Head of Department (Civil Engineering)',
+      hodEmail: 'hod.ce@chaitanya.edu.in',
+      hodPassword: 'Hod@CE2026!',
+      programs: 'B.Tech. Civil Engineering'
+    },
+
+    // 2. Undergraduate – Pharmacy
+    {
+      name: 'Department of Pharmacy',
+      code: 'PHARM',
+      facultyCode: 'FPH',
+      hodTitle: 'Head of Department (Pharmacy)',
+      hodEmail: 'hod.pharmacy@chaitanya.edu.in',
+      hodPassword: 'Hod@Pharm2026!',
+      programs: 'B.Pharmacy, Pharm. D, Pharm. D (PB), M.Pharmacy specializations'
+    },
+
+    // 3. Undergraduate – Agriculture
+    {
+      name: 'Department of Agriculture',
+      code: 'AGRI',
+      facultyCode: 'FAG',
+      hodTitle: 'Head of Department (Agriculture)',
+      hodEmail: 'hod.agri@chaitanya.edu.in',
+      hodPassword: 'Hod@Agri2026!',
+      programs: 'B.Sc. (Hons.) Agriculture, M.Sc. Agronomy'
+    },
+
+    // 4. Undergraduate – Nursing
+    {
+      name: 'Department of Nursing',
+      code: 'NURS',
+      facultyCode: 'FNU',
+      hodTitle: 'Head of Department (Nursing)',
+      hodEmail: 'hod.nursing@chaitanya.edu.in',
+      hodPassword: 'Hod@Nursing2026!',
+      programs: 'B.Sc. Nursing, M.Sc. Nursing'
+    },
+
+    // 5. Undergraduate – Physiotherapy
+    {
+      name: 'Department of Physiotherapy',
+      code: 'BPT',
+      facultyCode: 'FAHS',
+      hodTitle: 'Head of Department (Physiotherapy)',
+      hodEmail: 'hod.physio@chaitanya.edu.in',
+      hodPassword: 'Hod@Physio2026!',
+      programs: 'Bachelor of Physiotherapy (BPT), MPT'
+    },
+
+    // 6. Commerce & Business Management
+    {
+      name: 'Department of Commerce & Business Management',
+      code: 'CBM',
+      facultyCode: 'FCBM',
+      hodTitle: 'Head of Department (Commerce & Business Management)',
+      hodEmail: 'hod.cbm@chaitanya.edu.in',
+      hodPassword: 'Hod@CBM2026!',
+      programs: 'B.Com (Computer Applications), BBA (AICTE Approved), MBA'
+    },
+
+    // 7. Science Programs
+    {
+      name: 'Department of Computer Science & Applications',
+      code: 'CS',
+      facultyCode: 'FS',
+      hodTitle: 'Head of Department (Computer Science & Applications)',
+      hodEmail: 'hod.cs@chaitanya.edu.in',
+      hodPassword: 'Hod@CS2026!',
+      programs: 'B.Sc. Computer Science, BCA (AICTE Approved), MCA'
+    },
+    {
+      name: 'Department of Biotechnology, Microbiology & Chemistry',
+      code: 'LIFE-SCI',
+      facultyCode: 'FS',
+      hodTitle: 'Head of Department (Biotechnology, Microbiology & Chemistry)',
+      hodEmail: 'hod.lifesciences@chaitanya.edu.in',
+      hodPassword: 'Hod@LifeSci2026!',
+      programs: 'B.Sc. Biotechnology, Microbiology & Chemistry'
+    },
+    {
+      name: 'Department of Forensic Science & Chemistry',
+      code: 'FORENSIC',
+      facultyCode: 'FS',
+      hodTitle: 'Head of Department (Forensic Science & Chemistry)',
+      hodEmail: 'hod.forensic@chaitanya.edu.in',
+      hodPassword: 'Hod@Forensic2026!',
+      programs: 'B.Sc. Forensic Science'
+    },
+    {
+      name: 'Department of Nutrition, Dietetics and Food Science',
+      code: 'FOOD-SCI',
+      facultyCode: 'FS',
+      hodTitle: 'Head of Department (Food Science & Nutrition)',
+      hodEmail: 'hod.nutrition@chaitanya.edu.in',
+      hodPassword: 'Hod@Nutrition2026!',
+      programs: 'B.Sc. Nutrition, Dietetics and Food Science, M.Sc. Clinical Nutrition & Dietetics'
+    },
+
+    // 8. Allied Health Sciences
+    {
+      name: 'Department of Radiology & Imaging Technology',
+      code: 'RIT',
+      facultyCode: 'FAHS',
+      hodTitle: 'Head of Department (Radiology & Imaging Technology)',
+      hodEmail: 'hod.rit@chaitanya.edu.in',
+      hodPassword: 'Hod@RIT2026!',
+      programs: 'B.Sc. Radiology & Imaging Technology (RIT)'
+    },
+    {
+      name: 'Department of Anaesthesia & Operation Theatre Technology',
+      code: 'AOTT',
+      facultyCode: 'FAHS',
+      hodTitle: 'Head of Department (Anaesthesia & Operation Theatre Technology)',
+      hodEmail: 'hod.aott@chaitanya.edu.in',
+      hodPassword: 'Hod@AOTT2026!',
+      programs: 'B.Sc. Anaesthesia & Operation Theatre Technology (AOTT)'
+    },
+    {
+      name: 'Department of Cardiovascular Technology',
+      code: 'CVT',
+      facultyCode: 'FAHS',
+      hodTitle: 'Head of Department (Cardiovascular Technology)',
+      hodEmail: 'hod.cvt@chaitanya.edu.in',
+      hodPassword: 'Hod@CVT2026!',
+      programs: 'B.Sc. Cardiovascular Technology (CVT), M.Sc. Echocardiography'
+    },
+    {
+      name: 'Department of Medical Lab Technology',
+      code: 'MLT',
+      facultyCode: 'FAHS',
+      hodTitle: 'Head of Department (Medical Lab Technology)',
+      hodEmail: 'hod.mlt@chaitanya.edu.in',
+      hodPassword: 'Hod@MLT2026!',
+      programs: 'B.Sc. Medical Lab Technology (MLT), M.Sc. MLT'
+    },
+    {
+      name: 'Department of Clinical Embryology & ART',
+      code: 'CEART',
+      facultyCode: 'FAHS',
+      hodTitle: 'Head of Department (Clinical Embryology & ART)',
+      hodEmail: 'hod.embryology@chaitanya.edu.in',
+      hodPassword: 'Hod@Embryo2026!',
+      programs: 'M.Sc. Clinical Embryology & ART'
+    },
+
+    // 9. Academic Affairs & Research
+    {
+      name: 'Department of Humanities & Science',
+      code: 'HS',
+      facultyCode: 'ACAD',
+      hodTitle: 'Head of Department (Humanities & Science)',
+      hodEmail: 'hod.hs@chaitanya.edu.in',
+      hodPassword: 'Hod@HS2026!',
+      programs: 'Humanities & Basic Sciences'
+    },
+    {
+      name: 'Department of Research (Ph.D.)',
+      code: 'RES-PHD',
+      facultyCode: 'RD',
+      hodTitle: 'Head of Department (Research & Ph.D.)',
+      hodEmail: 'hod.research@chaitanya.edu.in',
+      hodPassword: 'Hod@Research2026!',
+      programs: 'Ph.D. Doctoral Research Programs'
+    }
   ];
 
+  // Disable old departments so only these official ones are active
+  db.prepare('UPDATE departments SET is_active = 0').run();
+
+  // Remove legacy HOD accounts that had personal names
+  const legacyHodEmails = [
+    'hod.mech@chaitanya.edu.in', 'hod.civil@chaitanya.edu.in', 'hod.chem@chaitanya.edu.in',
+    'hod.biotech@chaitanya.edu.in', 'hod.micro@chaitanya.edu.in', 'hod.math@chaitanya.edu.in',
+    'hod.science@chaitanya.edu.in', 'hod.ahs@chaitanya.edu.in', 'hod.ca@chaitanya.edu.in'
+  ];
+  const deleteLegacy = db.prepare(`DELETE FROM users WHERE email IN (${legacyHodEmails.map(() => '?').join(',')})`);
+  deleteLegacy.run(...legacyHodEmails);
+  db.prepare('DELETE FROM staff_profiles WHERE user_id NOT IN (SELECT id FROM users)').run();
+
   const insertDept = db.prepare(`
-    INSERT INTO departments (name, code, faculty_id, hod_name)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO departments (name, code, faculty_id, hod_name, is_active)
+    VALUES (?, ?, ?, ?, 1)
     ON CONFLICT(code) DO UPDATE SET
       name = excluded.name,
       faculty_id = excluded.faculty_id,
-      hod_name = excluded.hod_name
+      hod_name = excluded.hod_name,
+      is_active = 1
   `);
-  departments.forEach(d => {
-    const facId = d.faculty ? facultyMap[d.faculty] : null;
-    insertDept.run(d.name, d.code, facId, d.hod);
+
+  PROGRAM_DEPARTMENTS.forEach(d => {
+    const facId = facultyMap[d.facultyCode] || null;
+    insertDept.run(d.name, d.code, facId, d.hodTitle);
   });
 
   const deptMap = {};
   db.prepare('SELECT id, name, code FROM departments').all().forEach(d => {
-    deptMap[d.name] = d.id;
     deptMap[d.code] = d.id;
+    deptMap[d.name] = d.id;
   });
 
-  // 4. Designations
-  const designations = [
-    { name: 'Professor', category: 'Teaching' },
-    { name: 'Associate Professor', category: 'Teaching' },
-    { name: 'Assistant Professor', category: 'Teaching' },
-    { name: 'Professor of Practice', category: 'Teaching' },
-    { name: 'Senior Lecturer', category: 'Teaching' },
-    { name: 'Lecturer', category: 'Teaching' },
-    { name: 'Head of Department', category: 'Teaching' },
-    { name: 'Dean of Faculty', category: 'Teaching' },
-    { name: 'Registrar', category: 'Administrative' },
-    { name: 'Finance Officer', category: 'Administrative' },
-    { name: 'Assistant Registrar', category: 'Administrative' },
-    { name: 'Section Officer', category: 'Administrative' },
-    { name: 'Senior Assistant', category: 'Administrative' },
-    { name: 'Junior Assistant', category: 'Administrative' },
-    { name: 'System Administrator', category: 'Technical' },
-    { name: 'Senior Lab Assistant', category: 'Technical' },
-    { name: 'Laboratory Technician', category: 'Laboratory' },
-    { name: 'University Librarian', category: 'Library' },
-    { name: 'Assistant Librarian', category: 'Library' }
-  ];
-
-  const insertDesig = db.prepare(`
-    INSERT OR IGNORE INTO designations (name, category) VALUES (?, ?)
-  `);
-  designations.forEach(d => insertDesig.run(d.name, d.category));
-
-  // 5. Document Requirements
-  const docReqs = [
-    { name: 'Recent Passport Photograph', category: 'Identity', is_mandatory: 'Mandatory', applies_to_category: 'All', description: 'Recent color passport size photo (white background)' },
-    { name: 'Official Identity Proof (Aadhaar / Passport)', category: 'Identity', is_mandatory: 'Mandatory', applies_to_category: 'All', description: 'Aadhaar Card, Passport, or Driving License' },
-    { name: 'Proof of Date of Birth (10th / SSC Memo)', category: 'Identity', is_mandatory: 'Mandatory', applies_to_category: 'All', description: '10th Class SSC memo or Birth Certificate' },
-    { name: 'Undergraduate Degree Certificate', category: 'Educational', is_mandatory: 'Mandatory', applies_to_category: 'All', description: 'Original or Provisional UG Degree Certificate' },
-    { name: 'Postgraduate Degree Certificate', category: 'Educational', is_mandatory: 'Mandatory', applies_to_category: 'Teaching', description: 'Master degree certificate in relevant discipline' },
-    { name: 'Ph.D. Degree / Notification', category: 'Educational', is_mandatory: 'Conditional', applies_to_category: 'Teaching', description: 'Doctoral degree certificate or notification' },
-    { name: 'NET / SET / SLET / GATE Certificate', category: 'Professional', is_mandatory: 'Conditional', applies_to_category: 'Teaching', description: 'UGC-NET / CSIR-NET / SLET / GATE' },
-    { name: 'Professional Council Registration', category: 'Professional', is_mandatory: 'Conditional', applies_to_category: 'All', description: 'Pharmacy Council, Nursing Council, Bar Council, etc.' },
-    { name: 'University Appointment Order', category: 'Employment', is_mandatory: 'Mandatory', applies_to_category: 'All', description: 'Official appointment letter issued by the University' },
-    { name: 'Joining Report at Chaitanya University', category: 'Employment', is_mandatory: 'Mandatory', applies_to_category: 'All', description: 'Counter-signed joining report' }
-  ];
-
-  const insertDocReq = db.prepare(`
-    INSERT OR IGNORE INTO document_requirements (name, category, is_mandatory, applies_to_category, description)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-  docReqs.forEach(dr => insertDocReq.run(dr.name, dr.category, dr.is_mandatory, dr.applies_to_category, dr.description));
-
-  // Helper to upsert a user and ensure profile
-  const upsertUser = (user) => {
-    let existing = db.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE').get(user.email);
+  // Helper to upsert admin user
+  const upsertAdminUser = (u) => {
+    let existing = db.prepare('SELECT id, employee_id FROM users WHERE email = ? COLLATE NOCASE').get(u.email);
     let userId;
     if (existing) {
       db.prepare(`
         UPDATE users SET
-          employee_id = ?,
+          password_hash = ?,
           role = ?,
           full_name = ?,
           department_id = ?,
@@ -151,171 +314,95 @@ function seedDatabase() {
           category = ?
         WHERE id = ?
       `).run(
-        user.employee_id,
-        user.role,
-        user.full_name,
-        user.department_id || null,
-        user.faculty_id || null,
-        user.category || 'Teaching',
+        u.password_hash,
+        u.role,
+        u.full_name,
+        u.department_id || null,
+        u.faculty_id || null,
+        u.category || 'Teaching',
         existing.id
       );
       userId = existing.id;
     } else {
+      let empId = u.employee_id;
+      const empTaken = db.prepare('SELECT id FROM users WHERE employee_id = ?').get(empId);
+      if (empTaken) {
+        empId = `${u.employee_id}-${Math.floor(100 + Math.random() * 900)}`;
+      }
+
       const res = db.prepare(`
         INSERT INTO users (employee_id, email, password_hash, role, full_name, department_id, faculty_id, category)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        user.employee_id,
-        user.email.toLowerCase(),
-        user.password_hash,
-        user.role,
-        user.full_name,
-        user.department_id || null,
-        user.faculty_id || null,
-        user.category || 'Teaching'
+        empId,
+        u.email.toLowerCase().trim(),
+        u.password_hash,
+        u.role,
+        u.full_name,
+        u.department_id || null,
+        u.faculty_id || null,
+        u.category || 'Teaching'
       );
       userId = res.lastInsertRowid;
-    }
-
-    // Ensure staff_profiles row exists
-    const existingProfile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(userId);
-    if (!existingProfile) {
-      db.prepare(`
-        INSERT INTO staff_profiles (
-          user_id, employee_id, full_name, official_email, department_id, faculty_id,
-          designation, employee_category, workflow_status, completion_percentage
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 65)
-      `).run(
-        userId,
-        user.employee_id,
-        user.full_name,
-        user.email.toLowerCase(),
-        user.department_id || null,
-        user.faculty_id || null,
-        user.designation || (user.role === 'dean' ? 'Dean of Faculty' : user.role === 'hod' ? 'Head of Department' : 'Professor'),
-        user.category || 'Teaching',
-        user.role === 'staff' ? 'Draft' : 'Approved'
-      );
-    } else {
-      db.prepare(`
-        UPDATE staff_profiles SET
-          full_name = COALESCE(full_name, ?),
-          department_id = COALESCE(department_id, ?),
-          faculty_id = COALESCE(faculty_id, ?)
-        WHERE user_id = ?
-      `).run(user.full_name, user.department_id || null, user.faculty_id || null, userId);
     }
 
     return userId;
   };
 
-  // 6. SEED REGISTRAR (Prof. M. Ravinder)
-  const registrarId = upsertUser({
+  // Remove any fake/test staff profiles and non-staff profiles
+  console.log('Cleaning fake staff profiles and admin self-profiles...');
+  db.prepare(`
+    DELETE FROM staff_profiles
+    WHERE user_id IN (SELECT id FROM users WHERE role != 'staff')
+       OR official_email LIKE '%faculty.test.%'
+       OR official_email LIKE '%test.%'
+  `).run();
+
+  db.prepare(`
+    DELETE FROM users
+    WHERE email LIKE '%faculty.test.%'
+  `).run();
+
+  // 4. Seed Registrar
+  console.log('Seeding Registrar account...');
+  const registrarPassword = hashPassword('Registrar@Chaitanya2026');
+  upsertAdminUser({
     employee_id: 'CDU-REG-0001',
     email: 'registrar@chaitanya.edu.in',
-    password_hash: hashPassword('Registrar@123'),
+    password_hash: registrarPassword,
     role: 'registrar',
-    full_name: 'Prof. M. Ravinder, M.Sc., Ph.D',
-    department_id: deptMap['Registrar Office & Administration'],
-    faculty_id: facultyMap['University Administration'],
+    full_name: 'Office of the Registrar',
+    department_id: null,
+    faculty_id: facultyMap['ADMIN'] || null,
     category: 'Administrative',
     designation: 'Registrar & Chief Academic Administrator'
   });
 
-  // 7. SEED THE 12 OFFICIAL DEANS
-  const deansToSeed = [
-    {
-      employee_id: 'CDU-DEAN-001',
-      name: 'Prof. B. S. Anuradha',
-      title: 'Professor & Dean – Academic Affairs',
-      email: 'dean.academic@chaitanya.edu.in',
-      facultyCode: 'ACAD'
-    },
-    {
-      employee_id: 'CDU-DEAN-002',
-      name: 'Prof. S. Kavitha',
-      title: 'Dean, Science',
-      email: 'dean.science@chaitanya.edu.in',
-      facultyCode: 'FS'
-    },
-    {
-      employee_id: 'CDU-DEAN-003',
-      name: 'Dr. Amireddy Raju',
-      title: 'Dean, Administration',
-      email: 'dean.admin@chaitanya.edu.in',
-      facultyCode: 'ADMIN'
-    },
-    {
-      employee_id: 'CDU-DEAN-004',
-      name: 'Dr. T Christopher Reuben',
-      title: 'Dean, Research & Development',
-      email: 'dean.rd@chaitanya.edu.in',
-      facultyCode: 'RD'
-    },
-    {
-      employee_id: 'CDU-DEAN-005',
-      name: 'Dr. D. Dev Kumar',
-      title: 'Dean, Faculty of Agriculture',
-      email: 'dean.agri@chaitanya.edu.in',
-      facultyCode: 'FAG'
-    },
-    {
-      employee_id: 'CDU-DEAN-006',
-      name: 'Dr. Jagadeeshwar Madiraju',
-      title: 'Dean, Faculty of Engineering & Technology',
-      email: 'dean.engineering@chaitanya.edu.in',
-      facultyCode: 'FET'
-    },
-    {
-      employee_id: 'CDU-DEAN-007',
-      name: 'Dr. Ch. Prathyusha Reddy',
-      title: 'Dean, Admissions',
-      email: 'dean.admissions@chaitanya.edu.in',
-      facultyCode: 'ADMIS'
-    },
-    {
-      employee_id: 'CDU-DEAN-008',
-      name: 'Dr. Pagadala Suganda Devi',
-      title: 'Dean, Faculty of Commerce & Business Management',
-      email: 'dean.cbm@chaitanya.edu.in',
-      facultyCode: 'FCBM'
-    },
-    {
-      employee_id: 'CDU-DEAN-009',
-      name: 'Dr. G. Kumaraswamy',
-      title: 'Dean, Department of Pharmacy',
-      email: 'dean.pharmacy@chaitanya.edu.in',
-      facultyCode: 'FPH'
-    },
-    {
-      employee_id: 'CDU-DEAN-010',
-      name: 'Dr. Sunitha Chinnam',
-      title: 'Dean, Faculty of Nursing',
-      email: 'dean.nursing@chaitanya.edu.in',
-      facultyCode: 'FNU'
-    },
-    {
-      employee_id: 'CDU-DEAN-011',
-      name: 'Dr. B. Sreelatha',
-      title: 'Dean, Faculty of Science',
-      email: 'dean.science2@chaitanya.edu.in',
-      facultyCode: 'FS2'
-    },
-    {
-      employee_id: 'CDU-DEAN-012',
-      name: 'Prof. B. Rajender Reddy',
-      title: 'Controller of Examinations',
-      email: 'coe@chaitanya.edu.in',
-      facultyCode: 'EXAM'
-    }
+  // 5. Seed 12 Deans
+  console.log('Seeding 12 Official University Deans...');
+  const deanPassword = hashPassword('Dean@Chaitanya2026');
+  const deansList = [
+    { employee_id: 'CDU-DEAN-001', name: 'Dean, Faculty of Engineering & Technology', title: 'Dean, Faculty of Engineering & Technology', email: 'dean.engineering@chaitanya.edu.in', facCode: 'FET' },
+    { employee_id: 'CDU-DEAN-002', name: 'Dean, Faculty of Science', title: 'Dean, Science', email: 'dean.science@chaitanya.edu.in', facCode: 'FS' },
+    { employee_id: 'CDU-DEAN-003', name: 'Dean, Faculty of Pharmacy', title: 'Dean, Department of Pharmacy', email: 'dean.pharmacy@chaitanya.edu.in', facCode: 'FPH' },
+    { employee_id: 'CDU-DEAN-004', name: 'Dean, Faculty of Nursing', title: 'Dean, Faculty of Nursing', email: 'dean.nursing@chaitanya.edu.in', facCode: 'FNU' },
+    { employee_id: 'CDU-DEAN-005', name: 'Dean, Faculty of Agriculture', title: 'Dean, Faculty of Agriculture', email: 'dean.agri@chaitanya.edu.in', facCode: 'FAG' },
+    { employee_id: 'CDU-DEAN-006', name: 'Dean, Faculty of Commerce & Business Management', title: 'Dean, Faculty of Commerce & Business Management', email: 'dean.cbm@chaitanya.edu.in', facCode: 'FCBM' },
+    { employee_id: 'CDU-DEAN-007', name: 'Dean, Academic Affairs', title: 'Professor & Dean – Academic Affairs', email: 'dean.academic@chaitanya.edu.in', facCode: 'ACAD' },
+    { employee_id: 'CDU-DEAN-008', name: 'Dean, Administration', title: 'Dean, Administration', email: 'dean.admin@chaitanya.edu.in', facCode: 'ADMIN' },
+    { employee_id: 'CDU-DEAN-009', name: 'Dean, Research & Development', title: 'Dean, Research & Development', email: 'dean.rd@chaitanya.edu.in', facCode: 'RD' },
+    { employee_id: 'CDU-DEAN-010', name: 'Dean, Admissions', title: 'Dean, Admissions', email: 'dean.admissions@chaitanya.edu.in', facCode: 'ADMIS' },
+    { employee_id: 'CDU-DEAN-011', name: 'Dean, Faculty of Science (Division II)', title: 'Dean, Faculty of Science', email: 'dean.science2@chaitanya.edu.in', facCode: 'FS2' },
+    { employee_id: 'CDU-DEAN-012', name: 'Controller of Examinations', title: 'Controller of Examinations', email: 'coe@chaitanya.edu.in', facCode: 'EXAM' },
+    { employee_id: 'CDU-DEAN-013', name: 'Dean, Allied Health Sciences', title: 'Dean, Allied Health Sciences', email: 'dean.ahs@chaitanya.edu.in', facCode: 'FAHS' }
   ];
 
-  deansToSeed.forEach(d => {
-    const facId = facultyMap[d.facultyCode] || null;
-    const uid = upsertUser({
+  deansList.forEach(d => {
+    const facId = facultyMap[d.facCode] || null;
+    const uid = upsertAdminUser({
       employee_id: d.employee_id,
       email: d.email,
-      password_hash: hashPassword('Dean@123'),
+      password_hash: deanPassword,
       role: 'dean',
       full_name: d.name,
       faculty_id: facId,
@@ -327,220 +414,75 @@ function seedDatabase() {
     }
   });
 
-  // 8. SEED HODs MAPPED TO DEPARTMENTS & FACULTIES
-  const hodsToSeed = [
-    // Engineering (Dean: Dr. Jagadeeshwar Madiraju)
-    {
-      employee_id: 'CDU-HOD-1002',
-      name: 'Dr. K. V. S. Sharma',
-      email: 'hod.cse@chaitanya.edu.in',
-      deptCode: 'CSE',
-      facCode: 'FET',
-      designation: 'Professor & HOD, Computer Science & Engineering'
-    },
-    {
-      employee_id: 'CDU-HOD-1003',
-      name: 'Dr. P. Sreedhar',
-      email: 'hod.ece@chaitanya.edu.in',
-      deptCode: 'ECE',
-      facCode: 'FET',
-      designation: 'Professor & HOD, Electronics & Communication'
-    },
-    {
-      employee_id: 'CDU-HOD-1004',
-      name: 'Dr. N. Ramesh',
-      email: 'hod.eee@chaitanya.edu.in',
-      deptCode: 'EEE',
-      facCode: 'FET',
-      designation: 'Professor & HOD, Electrical & Electronics Engineering'
-    },
-    {
-      employee_id: 'CDU-HOD-1005',
-      name: 'Dr. M. Ashok',
-      email: 'hod.mech@chaitanya.edu.in',
-      deptCode: 'MECH',
-      facCode: 'FET',
-      designation: 'Professor & HOD, Mechanical Engineering'
-    },
-    {
-      employee_id: 'CDU-HOD-1006',
-      name: 'Dr. K. Srinivas',
-      email: 'hod.civil@chaitanya.edu.in',
-      deptCode: 'CIVIL',
-      facCode: 'FET',
-      designation: 'Professor & HOD, Civil Engineering'
-    },
+  // 6. Seed All Program-Wise HODs with Unique Emails & Passwords (NO personal names)
+  console.log(`Seeding all ${PROGRAM_DEPARTMENTS.length} Program-Wise HODs...`);
+  PROGRAM_DEPARTMENTS.forEach(d => {
+    const deptId = deptMap[d.code] || null;
+    const facId = facultyMap[d.facultyCode] || null;
+    const hashedPassword = hashPassword(d.hodPassword);
 
-    // Science (Dean: Prof. S. Kavitha)
-    {
-      employee_id: 'CDU-HOD-2001',
-      name: 'Dr. T. Satish',
-      email: 'hod.cs@chaitanya.edu.in',
-      deptCode: 'CS',
-      facCode: 'FS',
-      designation: 'Professor & HOD, Computer Science'
-    },
-    {
-      employee_id: 'CDU-HOD-2002',
-      name: 'Dr. K. Lakshmi',
-      email: 'hod.chem@chaitanya.edu.in',
-      deptCode: 'CHEM',
-      facCode: 'FS',
-      designation: 'Professor & HOD, Chemistry'
-    },
-    {
-      employee_id: 'CDU-HOD-2003',
-      name: 'Dr. S. Radhika',
-      email: 'hod.biotech@chaitanya.edu.in',
-      deptCode: 'BIOTECH',
-      facCode: 'FS',
-      designation: 'Professor & HOD, Biotechnology'
-    },
-    {
-      employee_id: 'CDU-HOD-2004',
-      name: 'Dr. V. Sunitha',
-      email: 'hod.micro@chaitanya.edu.in',
-      deptCode: 'MICRO',
-      facCode: 'FS',
-      designation: 'Professor & HOD, Microbiology'
-    },
-    {
-      employee_id: 'CDU-HOD-2005',
-      name: 'Dr. G. Prasad',
-      email: 'hod.math@chaitanya.edu.in',
-      deptCode: 'MATH',
-      facCode: 'FS',
-      designation: 'Professor & HOD, Mathematics & Statistics'
-    },
-
-    // Pharmacy (Dean: Dr. G. Kumaraswamy)
-    {
-      employee_id: 'CDU-HOD-3001',
-      name: 'Dr. V. Rajesh',
-      email: 'hod.pharmacy@chaitanya.edu.in',
-      deptCode: 'PHARM',
-      facCode: 'FPH',
-      designation: 'Professor & HOD, Pharmacy'
-    },
-
-    // Nursing (Dean: Dr. Sunitha Chinnam)
-    {
-      employee_id: 'CDU-HOD-4001',
-      name: 'Prof. Mary Thomas',
-      email: 'hod.nursing@chaitanya.edu.in',
-      deptCode: 'NURS',
-      facCode: 'FNU',
-      designation: 'Professor & HOD, Nursing'
-    },
-
-    // Agriculture (Dean: Dr. D. Dev Kumar)
-    {
-      employee_id: 'CDU-HOD-5001',
-      name: 'Dr. C. H. Venkat',
-      email: 'hod.agri@chaitanya.edu.in',
-      deptCode: 'AGRI',
-      facCode: 'FAG',
-      designation: 'Professor & HOD, Agriculture'
-    },
-
-    // Commerce & Business Management (Dean: Dr. Pagadala Suganda Devi)
-    {
-      employee_id: 'CDU-HOD-6001',
-      name: 'Dr. A. Sridhar',
-      email: 'hod.cbm@chaitanya.edu.in',
-      deptCode: 'CBM',
-      facCode: 'FCBM',
-      designation: 'Professor & HOD, Commerce & Business Management'
-    }
-  ];
-
-  hodsToSeed.forEach(h => {
-    const deptId = deptMap[h.deptCode] || null;
-    const facId = facultyMap[h.facCode] || null;
-    const uid = upsertUser({
-      employee_id: h.employee_id,
-      email: h.email,
-      password_hash: hashPassword('Hod@123'),
+    const uid = upsertAdminUser({
+      employee_id: `CDU-HOD-${d.code}`,
+      email: d.hodEmail,
+      password_hash: hashedPassword,
       role: 'hod',
-      full_name: h.name,
+      full_name: d.hodTitle, // e.g. "Head of Department (CSE)"
       department_id: deptId,
       faculty_id: facId,
       category: 'Teaching',
-      designation: h.designation
+      designation: d.hodTitle
     });
+
     if (deptId) {
-      db.prepare('UPDATE departments SET hod_id = ?, hod_name = ? WHERE id = ?').run(uid, h.name, deptId);
+      db.prepare('UPDATE departments SET hod_id = ?, hod_name = ? WHERE id = ?').run(uid, d.hodTitle, deptId);
     }
   });
 
-  // 9. ENSURE DR. SIRIKONDA VINOD (vinod@gmail.com) HAS KNOWN CREDENTIALS & CORRECT DEPARTMENT
-  const vinodUser = db.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE').get('vinod@gmail.com');
-  if (vinodUser) {
-    db.prepare(`
-      UPDATE users SET
-        password_hash = ?,
-        department_id = ?,
-        faculty_id = ?
-      WHERE id = ?
-    `).run(
-      hashPassword('Vinod@123'),
-      deptMap['CSE'],
-      facultyMap['FET'],
-      vinodUser.id
-    );
+  // Aliases for compatibility
+  // Engineering general alias
+  const cseDeptId = deptMap['CSE'];
+  const cseFacId = facultyMap['FET'];
+  upsertAdminUser({
+    employee_id: 'CDU-HOD-ENG-ALIAS',
+    email: 'hod.engineering@chaitanya.edu.in',
+    password_hash: hashPassword('Hod@CSE2026!'),
+    role: 'hod',
+    full_name: 'Head of Department (Engineering)',
+    department_id: cseDeptId,
+    faculty_id: cseFacId,
+    category: 'Teaching',
+    designation: 'Head of Department (Engineering)'
+  });
 
-    // Update profile
-    const fetDean = db.prepare("SELECT id FROM users WHERE email = 'dean.engineering@chaitanya.edu.in'").get();
-    const cseHod = db.prepare("SELECT id FROM users WHERE email = 'hod.cse@chaitanya.edu.in'").get();
-
-    db.prepare(`
-      UPDATE staff_profiles SET
-        department_id = ?,
-        faculty_id = ?,
-        hod_id = ?,
-        dean_id = ?
-      WHERE user_id = ?
-    `).run(
-      deptMap['CSE'],
-      facultyMap['FET'],
-      cseHod ? cseHod.id : null,
-      fetDean ? fetDean.id : null,
-      vinodUser.id
-    );
-  }
-
-  // 10. Vice-Chancellor & HR
-  upsertUser({
+  // 7. Seed VC & HR
+  upsertAdminUser({
     employee_id: 'CDU-VC-0001',
     email: 'vc@chaitanya.edu.in',
-    password_hash: hashPassword('Vc@123'),
+    password_hash: hashPassword('Vc@Chaitanya2026'),
     role: 'vc',
-    full_name: 'Prof. G. Narayana',
-    department_id: deptMap['RO-ADMIN'],
-    faculty_id: facultyMap['ADMIN'],
+    full_name: 'Hon’ble Vice-Chancellor',
+    faculty_id: facultyMap['ADMIN'] || null,
     category: 'Teaching',
     designation: 'Hon’ble Vice-Chancellor'
   });
 
-  upsertUser({
+  upsertAdminUser({
     employee_id: 'CDU-HR-0001',
     email: 'hr.establishment@chaitanya.edu.in',
-    password_hash: hashPassword('Hr@123'),
+    password_hash: hashPassword('Hr@Chaitanya2026'),
     role: 'hr',
-    full_name: 'Mr. M. Praveen',
-    department_id: deptMap['EST-HR'],
-    faculty_id: facultyMap['ADMIN'],
+    full_name: 'Assistant Registrar (HR & Establishment)',
+    faculty_id: facultyMap['ADMIN'] || null,
     category: 'Administrative',
     designation: 'Assistant Registrar (Establishment & HR)'
   });
 
-  console.log('Database seeding successfully completed with all 12 Deans, HODs, Registrar, and Faculty!');
+  console.log('✅ All Program-Wise HODs Seeded Successfully!');
+  console.log('===============================================================');
 }
 
 if (require.main === module) {
   seedDatabase();
 }
 
-module.exports = {
-  seedDatabase
-};
+module.exports = { seedDatabase };

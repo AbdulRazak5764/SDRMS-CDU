@@ -171,13 +171,14 @@ export default function AdminDashboard({ onInspectStaff }) {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/user/${deleteTarget.user_id}`, {
+      const targetId = deleteTarget.user_id || deleteTarget.id;
+      const res = await fetch(`/api/admin/user/${targetId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${localStorage.getItem('sdrms_token')}` }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to delete user');
-      showToast(data.message, 'success');
+      showToast(data.message || 'Staff account and entire dossier permanently deleted.', 'success');
       setDeleteTarget(null);
       fetchStats();
       fetchStaff();
@@ -797,7 +798,7 @@ export default function AdminDashboard({ onInspectStaff }) {
 
             <p className="text-xs text-slate-600 leading-relaxed">
               Are you sure you want to permanently delete the account and dossier for{' '}
-              <strong>{deleteTarget.full_name}</strong> ({deleteTarget.official_email}, Employee ID: {deleteTarget.employee_id})?
+              <strong>{deleteTarget.full_name}</strong> ({deleteTarget.official_email || deleteTarget.account_email}, Employee ID: {deleteTarget.employee_id})?
               All saved qualifications, publications, documents, and credentials will be removed from the university system.
             </p>
 

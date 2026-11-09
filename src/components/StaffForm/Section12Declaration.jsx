@@ -65,21 +65,21 @@ export default function Section12Declaration({
         targetRole: 'Level 1: Head of Department (HOD)',
         next: assignedDean?.name || 'Dean of Faculty',
         nextRole: 'Level 2: Dean of Faculty',
-        final: assignedRegistrar?.name || 'Prof. M. Ravinder, M.Sc., Ph.D (Registrar)'
+        final: assignedRegistrar?.name || 'Office of the Registrar'
       };
     }
     if (user?.role === 'hod') {
       return {
         target: assignedDean?.name || 'Dean of Faculty',
         targetRole: 'Level 2: Dean of Faculty',
-        next: assignedRegistrar?.name || 'Prof. M. Ravinder, M.Sc., Ph.D (Registrar)',
+        next: assignedRegistrar?.name || 'Office of the Registrar',
         nextRole: 'Final Seal: Office of the Registrar',
         final: 'Registrar Certification'
       };
     }
     if (user?.role === 'dean') {
       return {
-        target: assignedRegistrar?.name || 'Prof. M. Ravinder, M.Sc., Ph.D (Registrar)',
+        target: assignedRegistrar?.name || 'Office of the Registrar',
         targetRole: 'Final University Clearance & Certification',
         next: null,
         nextRole: null,
@@ -168,7 +168,7 @@ export default function Section12Declaration({
               Level 3: Final University Certification
             </div>
             <div className="text-sm font-extrabold text-slate-900 mt-0.5">
-              Prof. M. Ravinder, M.Sc., Ph.D
+              Office of the Registrar
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">
               Registrar & Super Administrator

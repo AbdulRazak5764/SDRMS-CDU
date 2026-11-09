@@ -5,7 +5,7 @@ import {
   ChevronRight, Lock, Eye, Download, Layers, School, Camera
 } from 'lucide-react';
 
-export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
+export default function LandingPage({ onGoLogin, onGoRegister }) {
   const campusPhotos = [
     {
       src: '/assets/campus-drone-aerial.jpg',
@@ -108,12 +108,12 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
           {/* Logo & Accreditation Title */}
           <div className="flex items-center gap-3">
             <img
-              src="/assets/chaitanya-banner.png"
+              src="/assets/chaitanya-official-logo.png?v=2"
               alt="Chaitanya (Deemed to be University)"
               className="h-10 sm:h-12 w-auto object-contain"
               onError={(e) => {
                 e.target.onerror = null;
-                e.target.src = '/assets/chaitanya-crest.jpg';
+                e.target.src = '/assets/chaitanya-crest-hd.jpg?v=2';
               }}
             />
           </div>
@@ -129,7 +129,7 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
           {/* Action CTAs */}
           <div className="flex items-center gap-2 sm:gap-3">
             <button
-              onClick={onGoLogin}
+              onClick={() => onGoLogin('faculty')}
               className="px-4 py-2 rounded-full border border-slate-300 hover:border-blue-500 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 font-bold text-xs transition-all shadow-2xs"
             >
               Faculty Sign In
@@ -178,36 +178,12 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
                 </button>
 
                 <button
-                  onClick={onGoLogin}
+                  onClick={() => onGoLogin('faculty')}
                   className="w-full sm:w-auto px-7 py-3.5 rounded-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 hover:text-blue-600 font-bold text-xs tracking-wide shadow-sm flex items-center justify-center gap-2 transition-all"
                 >
                   <Lock className="w-4 h-4 text-blue-600" />
                   <span>2. Faculty Sign In</span>
                 </button>
-              </div>
-
-              {/* Direct Demo Roles Shortcuts for Instant Testing */}
-              <div className="pt-4 border-t border-slate-200/80">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  ⚡ Instant One-Click Demo Role Access:
-                </div>
-                <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
-                  {[
-                    { label: 'Teaching Faculty', email: 'faculty@chaitanya.edu.in', badge: 'Faculty' },
-                    { label: 'Non-Teaching Staff', email: 'staff@chaitanya.edu.in', badge: 'Staff' },
-                    { label: 'Department Head (HOD)', email: 'hod.cse@chaitanya.edu.in', badge: 'HOD' },
-                    { label: 'HR Section', email: 'hr@chaitanya.edu.in', badge: 'HR' },
-                    { label: 'Registrar Admin', email: 'registrar@chaitanya.edu.in', badge: 'Registrar' }
-                  ].map((role) => (
-                    <button
-                      key={role.email}
-                      onClick={() => onDemoLogin(role.email)}
-                      className="px-3 py-1.5 rounded-full bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-[11px] font-semibold text-slate-700 hover:text-blue-700 shadow-2xs transition-all"
-                    >
-                      {role.label}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 
@@ -285,7 +261,7 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
               </div>
               <div className="pt-4 mt-3 border-t border-slate-200 flex items-center gap-2">
                 <button
-                  onClick={onGoLogin}
+                  onClick={() => onGoLogin('faculty')}
                   className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-all"
                 >
                   Faculty Sign In
@@ -312,7 +288,7 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
               </div>
               <div className="pt-4 mt-3 border-t border-slate-200">
                 <button
-                  onClick={() => onDemoLogin('hod.cse@chaitanya.edu.in')}
+                  onClick={() => onGoLogin('hod')}
                   className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all"
                 >
                   Enter HOD Portal
@@ -333,7 +309,7 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
               </div>
               <div className="pt-4 mt-3 border-t border-slate-200">
                 <button
-                  onClick={() => onDemoLogin('dean.engineering@chaitanya.edu.in')}
+                  onClick={() => onGoLogin('dean')}
                   className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition-all"
                 >
                   Enter Dean Portal
@@ -349,12 +325,12 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
                 </div>
                 <h3 className="font-extrabold text-slate-900 text-sm">4. Office of the Registrar</h3>
                 <p className="text-xs text-slate-500">
-                  Prof. M. Ravinder, M.Sc., Ph.D. Complete university organization hierarchy, final certification seal & deletions.
+                  Office of the Registrar. Complete university organization hierarchy, final certification seal & deletions.
                 </p>
               </div>
               <div className="pt-4 mt-3 border-t border-slate-200">
                 <button
-                  onClick={() => onDemoLogin('registrar@chaitanya.edu.in')}
+                  onClick={() => onGoLogin('registrar')}
                   className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition-all"
                 >
                   Enter Registrar Portal
@@ -437,7 +413,7 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
                   <span>SDRMS Verified</span>
                 </span>
                 <button
-                  onClick={onGoLogin}
+                  onClick={() => onGoLogin('faculty')}
                   className="text-blue-600 hover:text-blue-700 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 group-hover:gap-1.5 transition-all"
                 >
                   <span>View Dept</span>
@@ -580,7 +556,7 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
 
           <div className="flex items-center gap-4">
             <button
-              onClick={onGoLogin}
+              onClick={() => onGoLogin('faculty')}
               className="text-blue-600 hover:underline font-bold"
             >
               Faculty Portal
@@ -594,7 +570,7 @@ export default function LandingPage({ onGoLogin, onGoRegister, onDemoLogin }) {
             </button>
             <span>•</span>
             <button
-              onClick={() => onDemoLogin('registrar@chaitanya.edu.in')}
+              onClick={() => onGoLogin('registrar')}
               className="text-slate-700 hover:text-blue-600 font-semibold"
             >
               Registrar Portal

@@ -2,12 +2,24 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const dbPath = path.join(__dirname, '..', 'data', 'sdrms.db');
-const uploadsDir = path.join(__dirname, '..', 'uploads');
+const isVercel = !!process.env.VERCEL;
+const dbDir = isVercel ? '/tmp/data' : path.join(__dirname, '..', 'data');
+const uploadsDir = isVercel ? '/tmp/uploads' : path.join(__dirname, '..', 'uploads');
+const dbPath = path.join(dbDir, 'sdrms.db');
 
 // Ensure directories exist
-fs.mkdirSync(path.join(__dirname, '..', 'data'), { recursive: true });
-fs.mkdirSync(uploadsDir, { recursive: true });
+try {
+  fs.mkdirSync(dbDir, { recursive: true });
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  if (isVercel && !fs.existsSync(dbPath)) {
+    const seedDb = path.join(__dirname, '..', 'data', 'sdrms.db');
+    if (fs.existsSync(seedDb)) {
+      fs.copyFileSync(seedDb, dbPath);
+    }
+  }
+} catch (dirErr) {
+  console.warn('[DB Dir Init Warning]:', dirErr.message);
+}
 
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
@@ -71,13 +83,16 @@ function initSchema() {
       employee_id TEXT NOT NULL,
       
       -- Section 1: Basic Personal Info
+      salutation TEXT,
       full_name TEXT,
       name_regional TEXT,
       previous_name TEXT,
       dob TEXT,
       gender TEXT,
+      blood_group TEXT,
       marital_status TEXT,
       nationality TEXT DEFAULT 'Indian',
+      social_category TEXT,
       official_email TEXT,
       personal_email TEXT,
       mobile TEXT,
@@ -95,6 +110,7 @@ function initSchema() {
       
       -- Section 2: Employment and Service Details
       employee_category TEXT,
+      administrative_unit TEXT,
       faculty_id INTEGER REFERENCES faculties(id) ON DELETE SET NULL,
       department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
       designation TEXT,
@@ -436,6 +452,10 @@ function runMigrations() {
     if (!profileCols.includes('registrar_remarks')) db.exec('ALTER TABLE staff_profiles ADD COLUMN registrar_remarks TEXT;');
     if (!profileCols.includes('registrar_reviewed_at')) db.exec('ALTER TABLE staff_profiles ADD COLUMN registrar_reviewed_at DATETIME;');
     if (!profileCols.includes('registrar_reviewer_name')) db.exec('ALTER TABLE staff_profiles ADD COLUMN registrar_reviewer_name TEXT;');
+    if (!profileCols.includes('salutation')) db.exec('ALTER TABLE staff_profiles ADD COLUMN salutation TEXT;');
+    if (!profileCols.includes('blood_group')) db.exec('ALTER TABLE staff_profiles ADD COLUMN blood_group TEXT;');
+    if (!profileCols.includes('social_category')) db.exec('ALTER TABLE staff_profiles ADD COLUMN social_category TEXT;');
+    if (!profileCols.includes('administrative_unit')) db.exec('ALTER TABLE staff_profiles ADD COLUMN administrative_unit TEXT;');
 
     // 4. users check constraint and faculty_id column
     const userSqlRow = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get();

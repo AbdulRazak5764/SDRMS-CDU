@@ -6,16 +6,27 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
   const { showToast } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [customExam, setCustomExam] = useState('');
+  const [customAuthority, setCustomAuthority] = useState('');
 
-  const [form, setForm] = useState({
-    qualification_type: 'National Eligibility Test (NET)',
-    title_or_exam: 'UGC-NET for Lectureship / Assistant Professor',
-    qualifying_authority: 'National Testing Agency (NTA) / UGC',
-    registration_no: 'TL01004829',
-    award_date: '2019-12-31',
-    validity_date: 'Lifetime Validity',
-    verification_remarks: 'Valid Scorecard'
-  });
+  const emptyForm = {
+    qualification_type: '',
+    title_or_exam: '',
+    qualifying_authority: '',
+    registration_no: '',
+    award_date: '',
+    validity_date: '',
+    verification_remarks: ''
+  };
+
+  const [form, setForm] = useState(emptyForm);
+
+  const openModal = () => {
+    setForm(emptyForm);
+    setCustomExam('');
+    setCustomAuthority('');
+    setShowModal(true);
+  };
 
   const examOptions = [
     'UGC-NET for Lectureship / Assistant Professor',
@@ -54,6 +65,24 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
 
   const handleAdd = async (e) => {
     e.preventDefault();
+    const finalExam = (form.title_or_exam === 'Other Statutory Accreditation' || form.title_or_exam === 'Other')
+      ? customExam.trim()
+      : form.title_or_exam;
+    const finalAuthority = (form.qualifying_authority === 'Other Statutory University / National Body' || form.qualifying_authority === 'Other')
+      ? customAuthority.trim()
+      : form.qualifying_authority;
+
+    if (!finalExam || !finalAuthority) {
+      showToast('Please select examination and qualifying authority.', 'error');
+      return;
+    }
+
+    const derivedQualType = form.qualification_type || (
+      finalExam.toLowerCase().includes('council') || finalExam.toLowerCase().includes('pharmacist') || finalExam.toLowerCase().includes('nurse') || finalExam.toLowerCase().includes('advocate') || finalExam.toLowerCase().includes('license')
+        ? 'Statutory Council Registration'
+        : 'National / State Eligibility Test'
+    );
+
     setSaving(true);
     try {
       const res = await fetch('/api/staff/professional', {
@@ -62,7 +91,12 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('sdrms_token')}`
         },
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          ...form,
+          qualification_type: derivedQualType,
+          title_or_exam: finalExam,
+          qualifying_authority: finalAuthority
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to add record');
@@ -107,11 +141,11 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
         {!isLocked && (
           <button
             type="button"
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
+            onClick={openModal}
+            className="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Eligibility / Council (Dropdown)</span>
+            <span>Add Eligibility / Council</span>
           </button>
         )}
       </div>
@@ -173,13 +207,13 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
           <Award className="w-10 h-10 text-slate-400 mx-auto stroke-1" />
           <h4 className="font-bold text-sm text-slate-800">No Professional Qualifications Recorded</h4>
           <p className="text-xs max-w-sm mx-auto">
-            If you have qualified UGC-NET, SET, GATE, or hold Pharmacy / Nursing council registration, add it here via standard dropdown selection.
+            If you have qualified UGC-NET, SET, GATE, or hold Pharmacy / Nursing council registration, add it here.
           </p>
           {!isLocked && (
             <button
               type="button"
-              onClick={() => setShowModal(true)}
-              className="mt-2 px-5 py-2 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-all shadow-sm"
+              onClick={openModal}
+              className="mt-2 px-5 py-2 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-all shadow-sm cursor-pointer"
             >
               Add Eligibility Record
             </button>
@@ -198,13 +232,13 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
                   Add Eligibility Exam / Council Accreditation
                 </h4>
                 <p className="text-xs text-slate-500">
-                  Select your examination or council from pre-defined options.
+                  Select your examination or council accreditation from options.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold"
+                className="text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -219,12 +253,25 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
                   name="title_or_exam"
                   value={form.title_or_exam}
                   onChange={handleChange}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-semibold"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-semibold focus:bg-white"
+                  required
                 >
+                  <option value="">Select Examination / Council Accreditation...</option>
                   {examOptions.map(opt => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
+                {(form.title_or_exam === 'Other Statutory Accreditation' || form.title_or_exam === 'Other') && (
+                  <input
+                    type="text"
+                    value={customExam}
+                    onChange={e => setCustomExam(e.target.value)}
+                    placeholder="Type name of your examination / accreditation..."
+                    className="w-full mt-2 bg-white border border-blue-400 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500/20"
+                    required
+                    autoFocus
+                  />
+                )}
               </div>
 
               <div>
@@ -235,12 +282,25 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
                   name="qualifying_authority"
                   value={form.qualifying_authority}
                   onChange={handleChange}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-medium"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-medium focus:bg-white"
+                  required
                 >
+                  <option value="">Select Statutory Qualifying Authority...</option>
                   {authorityOptions.map(auth => (
                     <option key={auth} value={auth}>{auth}</option>
                   ))}
                 </select>
+                {(form.qualifying_authority === 'Other Statutory University / National Body' || form.qualifying_authority === 'Other') && (
+                  <input
+                    type="text"
+                    value={customAuthority}
+                    onChange={e => setCustomAuthority(e.target.value)}
+                    placeholder="Type name of statutory body / agency..."
+                    className="w-full mt-2 bg-white border border-blue-400 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500/20"
+                    required
+                    autoFocus
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -253,8 +313,8 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
                     name="registration_no"
                     value={form.registration_no}
                     onChange={handleChange}
-                    placeholder="e.g. TL01004829"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono"
+                    placeholder=""
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:bg-white"
                     required
                   />
                 </div>
@@ -268,7 +328,7 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
                     name="award_date"
                     value={form.award_date}
                     onChange={handleChange}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white"
                     required
                   />
                 </div>
@@ -278,14 +338,14 @@ export default function Section4Professional({ professionalQuals = [], onRefresh
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 rounded-full border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50"
+                  className="px-4 py-2 rounded-full border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
                 >
                   <Check className="w-4 h-4" />
                   <span>{saving ? 'Saving...' : 'Add Statutory Record'}</span>

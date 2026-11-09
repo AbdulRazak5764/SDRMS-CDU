@@ -7,16 +7,23 @@ export default function Section7Training({ trainingProgrammes = [], onRefreshDat
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     programme_title: '',
     organizing_institution: '',
-    category: 'FDP',
+    category: '',
     start_date: '',
     end_date: '',
-    duration_hours_days: '5 Days (40 Hours)',
-    mode: 'Hybrid',
+    duration_hours_days: '',
+    mode: '',
     certificate_no: ''
-  });
+  };
+
+  const [form, setForm] = useState(emptyForm);
+
+  const openAddModal = () => {
+    setForm(emptyForm);
+    setShowAddModal(true);
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -44,16 +51,7 @@ export default function Section7Training({ trainingProgrammes = [], onRefreshDat
       if (!res.ok) throw new Error(data.error || 'Failed to add training programme');
       showToast('Training programme added.', 'success');
       setShowAddModal(false);
-      setForm({
-        programme_title: '',
-        organizing_institution: '',
-        category: 'FDP',
-        start_date: '',
-        end_date: '',
-        duration_hours_days: '5 Days (40 Hours)',
-        mode: 'Hybrid',
-        certificate_no: ''
-      });
+      setForm(emptyForm);
       onRefreshData();
     } catch (err) {
       showToast(err.message, 'error');
@@ -92,7 +90,7 @@ export default function Section7Training({ trainingProgrammes = [], onRefreshDat
 
         {!isLocked && (
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={openAddModal}
             className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow transition-colors flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
@@ -185,14 +183,16 @@ export default function Section7Training({ trainingProgrammes = [], onRefreshDat
             <form onSubmit={handleAdd} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Programme Category
+                  Programme Category <span className="text-rose-500">*</span>
                 </label>
                 <select
                   name="category"
                   value={form.category}
                   onChange={handleChange}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs"
+                  required
                 >
+                  <option value="">Select Programme Category...</option>
                   <option value="FDP">Faculty Development Programme (FDP)</option>
                   <option value="Orientation">Orientation Programme</option>
                   <option value="Refresher">UGC / AICTE Refresher Course</option>
@@ -285,6 +285,7 @@ export default function Section7Training({ trainingProgrammes = [], onRefreshDat
                     onChange={handleChange}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs"
                   >
+                    <option value="">Select Training Mode...</option>
                     <option value="Offline">Offline / In-Person</option>
                     <option value="Online">Online</option>
                     <option value="Hybrid">Hybrid</option>

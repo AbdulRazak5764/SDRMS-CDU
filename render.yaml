@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: chaitanya-sdrms
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build && node server/seed.js
+    startCommand: node server/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: "*"
+    disk:
+      name: sdrms-data
+      mountPath: /app/data
+      sizeGB: 1
+

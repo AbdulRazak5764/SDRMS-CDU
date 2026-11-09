@@ -4,9 +4,9 @@ import { ShieldAlert, Check } from 'lucide-react';
 export default function Section11AdditionalService({ profile, onSaveDraft, isLocked }) {
   const [formData, setFormData] = useState({
     leave_deputation_info: profile.leave_deputation_info || '',
-    promotion_history_notes: profile.promotion_history_notes || 'Promoted to Assistant Professor (Senior Scale) under Career Advancement Scheme (CAS) w.e.f. August 2021.',
+    promotion_history_notes: profile.promotion_history_notes || '',
     transfer_history_notes: profile.transfer_history_notes || '',
-    service_gap_explanation: profile.service_gap_explanation || 'No service breaks or gaps between postings.'
+    service_gap_explanation: profile.service_gap_explanation || ''
   });
 
   const handleChange = (e) => {

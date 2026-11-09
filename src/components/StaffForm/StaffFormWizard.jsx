@@ -15,12 +15,36 @@ import Section7Training from './Section7Training';
 import Section10StatutoryDocs from './Section10StatutoryDocs';
 import Section12Declaration from './Section12Declaration';
 
+function NonTeachingNotice({ moduleName, onSkip }) {
+  return (
+    <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-4 my-2">
+      <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+        <Briefcase className="w-6 h-6" />
+      </div>
+      <h3 className="text-base font-bold text-slate-800">
+        {moduleName} — (Not Applicable for Non-Teaching Staff)
+      </h3>
+      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+        This module is exclusively designed for Teaching Faculty. As non-teaching staff, you do not need to submit pedagogical or research records. You may proceed directly to the Documents Vault.
+      </p>
+      <button
+        type="button"
+        onClick={onSkip}
+        className="px-6 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all inline-flex items-center gap-1.5 cursor-pointer"
+      >
+        <span>Proceed to Module 9: Documents Vault →</span>
+      </button>
+    </div>
+  );
+}
+
 export default function StaffFormWizard({
   profileData,
   activeStep = 1,
   setActiveStep,
   onSaveDraft,
   onRefreshData,
+  onLiveUpdate,
   onOpenPrintView,
   saving
 }) {
@@ -28,21 +52,38 @@ export default function StaffFormWizard({
   const omissions = profileData?.omissions || [];
   const status = profile.workflow_status || 'Draft';
   const isLocked = ['Pending HOD Approval', 'Pending Dean Approval', 'Pending Registrar Approval', 'Submitted', 'Under Verification', 'Approved', 'Archived'].includes(status);
+  const isTeachingStaff = (profile.employee_category || 'Teaching') === 'Teaching';
 
-  // Exactly 9 Core Faculty Modules as requested by user
+  // Official Core Faculty Modules: Vault & Clearance separated into distinct modules
   const sections = [
     { num: 1, title: '1. Personal Dossier', fullTitle: 'Module 1: Personal Identity & Residential Dossier', icon: User },
     { num: 2, title: '2. Cadre & Service', fullTitle: 'Module 2: University Employment & Cadre Placement', icon: Briefcase },
     { num: 3, title: '3. Educational Quals', fullTitle: 'Module 3: Educational Qualifications (SSC to Ph.D.)', icon: GraduationCap },
     { num: 4, title: '4. Eligibility & NET', fullTitle: 'Module 4: Statutory Eligibility (NET/SLET/GATE) & Councils', icon: Award },
-    { num: 5, title: '5. Teaching Workload', fullTitle: 'Module 5: Collegiate Teaching Experience & Pedagogy', icon: Clock },
-    { num: 6, title: '6. Research & Patents', fullTitle: 'Module 6: Research Publications, Patents & Books', icon: BookOpen },
-    { num: 7, title: '7. Funded Projects', fullTitle: 'Module 7: Sponsored Research Grants & Consultancy', icon: DollarSign },
-    { num: 8, title: '8. FDPs & Workshops', fullTitle: 'Module 8: Faculty Development Programmes & Training', icon: Award },
-    { num: 9, title: '9. Vault & Clearance', fullTitle: 'Module 9: Statutory Documents Vault & Multi-Tier Clearance', icon: CheckSquare }
+    { num: 5, title: isTeachingStaff ? '5. Teaching Experience' : '5. Teaching (N/A)', fullTitle: 'Module 5: Collegiate Teaching Experience & Pedagogy', icon: Clock },
+    { num: 6, title: isTeachingStaff ? '6. Research & Patents' : '6. Research (N/A)', fullTitle: 'Module 6: Research Publications, Patents & Books', icon: BookOpen },
+    { num: 7, title: isTeachingStaff ? '7. Funded Projects' : '7. Projects (N/A)', fullTitle: 'Module 7: Sponsored Research Grants & Consultancy', icon: DollarSign },
+    { num: 8, title: isTeachingStaff ? '8. FDPs & Workshops' : '8. FDPs (N/A)', fullTitle: 'Module 8: Faculty Development Programmes & Training', icon: Award },
+    { num: 9, title: '9. Documents Vault', fullTitle: 'Module 9: Statutory Documents Vault & Certificates', icon: FileText },
+    { num: 10, title: '10. Clearance & Submit', fullTitle: 'Module 10: Institutional Clearance & Final Declaration', icon: CheckSquare }
   ];
 
   const currentSection = sections.find(s => s.num === activeStep) || sections[0];
+
+  // Save draft and automatically advance to next module as requested by user
+  const handleSaveAndNext = async (customFields = {}) => {
+    if (onSaveDraft) {
+      await onSaveDraft(customFields);
+    }
+    if (activeStep < 10) {
+      if (!isTeachingStaff && activeStep === 4) {
+        setActiveStep(9);
+      } else {
+        setActiveStep(prev => Math.min(10, prev + 1));
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -137,8 +178,8 @@ export default function StaffFormWizard({
           </button>
 
           <button
-            onClick={() => setActiveStep(Math.min(9, activeStep + 1))}
-            disabled={activeStep === 9}
+            onClick={() => setActiveStep(Math.min(10, activeStep + 1))}
+            disabled={activeStep === 10}
             className="px-4 py-2 rounded-full bg-slate-900 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-40"
           >
             <span className="hidden sm:inline">Next Module</span>
@@ -153,8 +194,9 @@ export default function StaffFormWizard({
         {activeStep === 1 && (
           <Section1Personal
             profile={profile}
-            onSaveDraft={onSaveDraft}
+            onSaveDraft={handleSaveAndNext}
             onRefreshData={onRefreshData}
+            onLiveUpdate={onLiveUpdate}
             isLocked={isLocked}
           />
         )}
@@ -162,7 +204,7 @@ export default function StaffFormWizard({
         {activeStep === 2 && (
           <Section2Employment
             profile={profile}
-            onSaveDraft={onSaveDraft}
+            onSaveDraft={handleSaveAndNext}
             onRefreshData={onRefreshData}
             isLocked={isLocked}
           />
@@ -185,36 +227,19 @@ export default function StaffFormWizard({
         )}
 
         {activeStep === 5 && (
-          <Section5TeachingExp
-            teachingExp={profileData?.teachingExp || []}
-            onRefreshData={onRefreshData}
-            isLocked={isLocked}
-          />
+          isTeachingStaff ? (
+            <Section5TeachingExp
+              teachingExp={profileData?.teachingExp || []}
+              onRefreshData={onRefreshData}
+              isLocked={isLocked}
+            />
+          ) : (
+            <NonTeachingNotice moduleName="Module 5: Collegiate Teaching Experience" onSkip={() => setActiveStep(9)} />
+          )
         )}
 
         {activeStep === 6 && (
-          <Section6Research
-            publications={profileData?.publications || []}
-            projects={profileData?.projects || []}
-            patents={profileData?.patents || []}
-            academicContributions={profileData?.academicContributions || []}
-            onRefreshData={onRefreshData}
-            isLocked={isLocked}
-          />
-        )}
-
-        {activeStep === 7 && (
-          <div className="space-y-6">
-            <div className="border-b border-slate-200 pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-blue-600" />
-                Module 7: Sponsored Research Grants, Projects & Consultancy
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Funded projects from DST, SERB, AICTE, UGC, ICMR, and institutional seed grants.
-              </p>
-            </div>
-
+          isTeachingStaff ? (
             <Section6Research
               publications={profileData?.publications || []}
               projects={profileData?.projects || []}
@@ -223,48 +248,118 @@ export default function StaffFormWizard({
               onRefreshData={onRefreshData}
               isLocked={isLocked}
             />
-          </div>
+          ) : (
+            <NonTeachingNotice moduleName="Module 6: Research Publications, Patents & Books" onSkip={() => setActiveStep(9)} />
+          )
         )}
 
-        {activeStep === 8 && (
-          <Section7Training
-            trainingProgrammes={profileData?.trainingProgrammes || []}
-            onRefreshData={onRefreshData}
-            isLocked={isLocked}
-          />
-        )}
-
-        {activeStep === 9 && (
-          <div className="space-y-8">
-            {/* 1. Document Vault */}
-            <div>
-              <div className="border-b border-slate-200 pb-2 mb-4">
+        {activeStep === 7 && (
+          isTeachingStaff ? (
+            <div className="space-y-6">
+              <div className="border-b border-slate-200 pb-3">
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  Statutory Documents Vault
+                  <DollarSign className="w-5 h-5 text-blue-600" />
+                  Module 7: Sponsored Research Grants, Projects & Consultancy
                 </h3>
-                <p className="text-xs text-slate-500">
-                  Upload Appointment Order, SSC Memo, UG/PG Degrees, and Aadhaar card copies.
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Funded projects from DST, SERB, AICTE, UGC, ICMR, and institutional seed grants.
                 </p>
               </div>
 
-              <Section10StatutoryDocs
-                documents={profileData?.documents || []}
+              <Section6Research
+                publications={profileData?.publications || []}
+                projects={profileData?.projects || []}
+                patents={profileData?.patents || []}
+                academicContributions={profileData?.academicContributions || []}
                 onRefreshData={onRefreshData}
                 isLocked={isLocked}
               />
+            </div>
+          ) : (
+            <NonTeachingNotice moduleName="Module 7: Sponsored Research Grants & Projects" onSkip={() => setActiveStep(9)} />
+          )
+        )}
+
+        {activeStep === 8 && (
+          isTeachingStaff ? (
+            <Section7Training
+              trainingProgrammes={profileData?.trainingProgrammes || []}
+              onRefreshData={onRefreshData}
+              isLocked={isLocked}
+            />
+          ) : (
+            <NonTeachingNotice moduleName="Module 8: Faculty Development Programmes & Training" onSkip={() => setActiveStep(9)} />
+          )
+        )}
+
+        {activeStep === 9 && (
+          <div className="space-y-6">
+            <div className="border-b border-slate-200 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                Module 9: Statutory Documents Vault
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Upload verifiable PDF scans of Appointment Order, SSC Memo, UG/PG Degrees, and Aadhaar card copies.
+              </p>
             </div>
 
-            {/* 2. Declaration & Multi-Tier Routing */}
-            <div className="pt-6 border-t-2 border-slate-200">
-              <Section12Declaration
-                profileData={profileData}
-                onRefreshData={onRefreshData}
-                onNavigateSection={setActiveStep}
-                onOpenPrintView={onOpenPrintView}
-                isLocked={isLocked}
-              />
+            <Section10StatutoryDocs
+              documents={profileData?.documents || []}
+              onRefreshData={onRefreshData}
+              isLocked={isLocked}
+            />
+          </div>
+        )}
+
+        {activeStep === 10 && (
+          <div className="space-y-6">
+            <div className="border-b border-slate-200 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <CheckSquare className="w-5 h-5 text-blue-600" />
+                Module 10: Institutional Clearance & Final Declaration
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Review verified profile details, complete institutional declaration, and route dossier to HOD for scrutiny.
+              </p>
             </div>
+
+            <Section12Declaration
+              profileData={profileData}
+              onRefreshData={onRefreshData}
+              onNavigateSection={setActiveStep}
+              onOpenPrintView={onOpenPrintView}
+              isLocked={isLocked}
+            />
+          </div>
+        )}
+
+        {/* Bottom Module Flow Progression for List/Table Modules 3 to 9 */}
+        {activeStep >= 3 && activeStep <= 9 && (
+          <div className="pt-6 mt-6 border-t border-slate-200 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveStep(prev => Math.max(1, prev - 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="px-5 py-2.5 rounded-full border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>← Previous Module</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveStep(prev => Math.min(10, prev + 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="px-6 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <span>Save & Proceed to Next Module →</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         )}
       </div>

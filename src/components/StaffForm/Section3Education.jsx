@@ -6,25 +6,38 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
   const { showToast } = useAuth();
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [customDegree, setCustomDegree] = useState('');
+  const [customDiscipline, setCustomDiscipline] = useState('');
+  const [customClassGrade, setCustomClassGrade] = useState('');
 
-  const [form, setForm] = useState({
-    level: 'Undergraduate',
-    degree_title: 'B.Tech',
-    discipline: 'Computer Science & Engineering',
-    institution: 'Chaitanya (Deemed to be University)',
+  const emptyForm = {
+    level: '',
+    degree_title: '',
+    discipline: '',
+    institution: '',
     college: '',
     country: 'India',
-    year_of_admission: '2016',
-    year_of_completion: '2020',
-    award_month_year: 'May 2020',
-    mode_of_study: 'Full-time',
-    registration_no: '16CDU0402',
-    class_grade: 'First Class with Distinction',
-    percentage_or_cgpa: '8.4 CGPA',
-    max_marks: '10',
-    marks_obtained: '8.4',
+    year_of_admission: '',
+    year_of_completion: '',
+    award_month_year: '',
+    mode_of_study: '',
+    registration_no: '',
+    class_grade: '',
+    percentage_or_cgpa: '',
+    max_marks: '',
+    marks_obtained: '',
     equivalence_details: ''
-  });
+  };
+
+  const [form, setForm] = useState(emptyForm);
+
+  const openAddModal = () => {
+    setForm(emptyForm);
+    setCustomDegree('');
+    setCustomDiscipline('');
+    setCustomClassGrade('');
+    setShowAddModal(true);
+  };
 
   const degreeOptions = [
     'B.Tech', 'B.E.', 'B.Sc', 'B.Com', 'B.Pharm', 'B.A.', 'B.B.A.', 'B.C.A.',
@@ -62,10 +75,8 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
     'Other Renowned Indian University / Board'
   ];
 
-  const yearsList = [
-    2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017,
-    2016, 2015, 2014, 2013, 2012, 2011, 2010, 2008, 2005, 2000, 1995
-  ];
+  const currentYear = new Date().getFullYear();
+  const yearsList = Array.from({ length: currentYear - 1950 + 1 }, (_, i) => currentYear - i);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -74,8 +85,12 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    if (!form.degree_title || !form.institution) {
-      showToast('Degree title and institution are required.', 'error');
+    const finalDegree = form.degree_title === 'Other' ? customDegree.trim() : form.degree_title;
+    const finalDiscipline = form.discipline === 'Other' ? customDiscipline.trim() : form.discipline;
+    const finalClassGrade = form.class_grade === 'Other' ? customClassGrade.trim() : form.class_grade;
+
+    if (!finalDegree || !form.institution) {
+      showToast('Degree title and awarding university/board are required.', 'error');
       return;
     }
 
@@ -87,7 +102,12 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('sdrms_token')}`
         },
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          ...form,
+          degree_title: finalDegree,
+          discipline: finalDiscipline,
+          class_grade: finalClassGrade
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to add qualification');
@@ -132,11 +152,11 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
         {!isLocked && (
           <button
             type="button"
-            onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
+            onClick={openAddModal}
+            className="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Degree (Quick Dropdown)</span>
+            <span>Add Qualification</span>
           </button>
         )}
       </div>
@@ -162,12 +182,12 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                   <tr key={q.id} className="hover:bg-blue-50/40 transition-colors">
                     <td className="py-3 px-4 font-semibold text-slate-900">
                       <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
-                        {q.level}
+                        {q.level || 'Degree'}
                       </span>
                     </td>
                     <td className="py-3 px-4">
                       <div className="font-bold text-slate-900">{q.degree_title}</div>
-                      <div className="text-[11px] text-slate-500">{q.discipline}</div>
+                      {q.discipline && <div className="text-[11px] text-slate-500">{q.discipline}</div>}
                     </td>
                     <td className="py-3 px-4">
                       <div className="font-medium text-slate-800">{q.institution}</div>
@@ -210,13 +230,13 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
           <GraduationCap className="w-10 h-10 text-slate-400 mx-auto stroke-1" />
           <h4 className="font-bold text-sm text-slate-800">No Degree Records Added Yet</h4>
           <p className="text-xs max-w-sm mx-auto">
-            Please record your qualifications (e.g. B.Tech, M.Tech, Ph.D.). All fields are fast dropdown options!
+            Please record your qualifications (e.g. B.Tech, M.Tech, Ph.D.) with university, year, and marks.
           </p>
           {!isLocked && (
             <button
               type="button"
-              onClick={() => setShowAddModal(true)}
-              className="mt-2 px-5 py-2 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-all shadow-sm"
+              onClick={openAddModal}
+              className="mt-2 px-5 py-2 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-all shadow-sm cursor-pointer"
             >
               Add First Qualification Record
             </button>
@@ -224,7 +244,7 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
         </div>
       )}
 
-      {/* Quick Add Degree Modal with Pre-populated Dropdowns */}
+      {/* Add Degree Modal with Clean User-Selected Dropdowns & Free Text Inputs */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overflow-y-auto">
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 animate-in fade-in zoom-in-95 duration-200 space-y-4">
@@ -235,13 +255,13 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                   Add Educational Qualification
                 </h4>
                 <p className="text-xs text-slate-500">
-                  Select your degree, branch, and university from dropdown options.
+                  Select your qualification details or type your University / Board name directly.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -258,7 +278,9 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                     value={form.level}
                     onChange={handleChange}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-medium"
+                    required
                   >
+                    <option value="">Select Qualification Level...</option>
                     <option value="Undergraduate">Undergraduate (UG)</option>
                     <option value="Postgraduate">Postgraduate (PG)</option>
                     <option value="Doctoral (Ph.D)">Doctoral (Ph.D.)</option>
@@ -266,6 +288,7 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                     <option value="Intermediate / +2">Intermediate / +2</option>
                     <option value="SSC / 10th">SSC / 10th Class</option>
                     <option value="Diploma">Polytechnic Diploma</option>
+                    <option value="Other">Other Certificate / Level</option>
                   </select>
                 </div>
 
@@ -278,11 +301,24 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                     value={form.degree_title}
                     onChange={handleChange}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-bold"
+                    required
                   >
+                    <option value="">Select Degree Title...</option>
                     {degreeOptions.map(deg => (
                       <option key={deg} value={deg}>{deg}</option>
                     ))}
                   </select>
+                  {form.degree_title === 'Other' && (
+                    <input
+                      type="text"
+                      value={customDegree}
+                      onChange={e => setCustomDegree(e.target.value)}
+                      placeholder="Please type your degree title..."
+                      className="w-full mt-2 bg-white border border-blue-400 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500/20"
+                      required
+                      autoFocus
+                    />
+                  )}
                 </div>
               </div>
 
@@ -295,30 +331,59 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                   value={form.discipline}
                   onChange={handleChange}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-medium"
+                  required
                 >
+                  <option value="">Select Discipline / Branch...</option>
                   {disciplineOptions.map(disc => (
                     <option key={disc} value={disc}>{disc}</option>
                   ))}
                 </select>
+                {form.discipline === 'Other' && (
+                  <input
+                    type="text"
+                    value={customDiscipline}
+                    onChange={e => setCustomDiscipline(e.target.value)}
+                    placeholder="Please type your discipline / specialization..."
+                    className="w-full mt-2 bg-white border border-blue-400 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500/20"
+                    required
+                    autoFocus
+                  />
+                )}
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Awarding University / Board <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  name="institution"
-                  value={form.institution}
-                  onChange={handleChange}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-medium"
-                >
-                  {universityOptions.map(univ => (
-                    <option key={univ} value={univ}>{univ}</option>
-                  ))}
-                </select>
+              {/* Awarding University / Board & College Name: Simple Type Text Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Awarding University / Board <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="institution"
+                    value={form.institution}
+                    onChange={handleChange}
+                    placeholder="Type University or Board name (e.g. Osmania, JNTUH, CBSE)..."
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    College / Institution Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    name="college"
+                    value={form.college}
+                    onChange={handleChange}
+                    placeholder="Type College / School name if applicable..."
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Award Year <span className="text-rose-500">*</span>
@@ -328,7 +393,9 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                     value={form.year_of_completion}
                     onChange={handleChange}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-bold"
+                    required
                   >
+                    <option value="">Select Year (1950 to Present)...</option>
                     {yearsList.map(y => (
                       <option key={y} value={y}>{y}</option>
                     ))}
@@ -344,16 +411,37 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                     value={form.mode_of_study}
                     onChange={handleChange}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
+                    required
                   >
+                    <option value="">Select Mode...</option>
                     <option value="Full-time">Full-time Regular</option>
                     <option value="Part-time">Part-time</option>
                     <option value="Distance / Online">Distance / Online</option>
+                    <option value="Evening / Executive">Evening / Executive</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Marks & Grade Details: Type Marks Freely or Select/Type Grade */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Marks / % / CGPA Obtained <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="percentage_or_cgpa"
+                    value={form.percentage_or_cgpa}
+                    onChange={handleChange}
+                    placeholder="Type marks (e.g. 85%, 8.4 CGPA, 850/1000)..."
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-bold focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    required
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Class / Grade <span className="text-rose-500">*</span>
+                    Class / Grade / Division
                   </label>
                   <select
                     name="class_grade"
@@ -361,28 +449,25 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                     onChange={handleChange}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                   >
+                    <option value="">Select Grade / Division...</option>
                     <option value="First Class with Distinction">Distinction (75% and above)</option>
                     <option value="First Class">First Class (60% to 74%)</option>
                     <option value="Second Class">Second Class (50% to 59%)</option>
                     <option value="Pass Class">Pass Division</option>
                     <option value="Exemplary Grade">Exemplary Grade</option>
+                    <option value="Grade Points / CGPA">Grade Points / CGPA</option>
+                    <option value="Other">Other (Type Grade Manually)...</option>
                   </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Percentage / CGPA Obtained
-                  </label>
-                  <input
-                    type="text"
-                    name="percentage_or_cgpa"
-                    value={form.percentage_or_cgpa}
-                    onChange={handleChange}
-                    placeholder="e.g. 8.4 CGPA or 78%"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
-                  />
+                  {form.class_grade === 'Other' && (
+                    <input
+                      type="text"
+                      value={customClassGrade}
+                      onChange={e => setCustomClassGrade(e.target.value)}
+                      placeholder="Type grade (e.g. O Grade, A+, First Div)..."
+                      className="w-full mt-2 bg-white border border-blue-400 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500/20"
+                      autoFocus
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -394,8 +479,8 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                     name="registration_no"
                     value={form.registration_no}
                     onChange={handleChange}
-                    placeholder="e.g. 16CDU0402"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono"
+                    placeholder="Type Hall Ticket / Roll number..."
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:bg-white"
                   />
                 </div>
               </div>
@@ -404,14 +489,14 @@ export default function Section3Education({ qualifications = [], onRefreshData, 
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-full border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors"
+                  className="px-4 py-2 rounded-full border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Check className="w-4 h-4" />
                   <span>{saving ? 'Saving...' : 'Add Qualification Record'}</span>

@@ -9,16 +9,28 @@ export default function Section10StatutoryDocs({ documents = [], onRefreshData, 
   const [previewDoc, setPreviewDoc] = useState(null);
   const [uploading, setUploading] = useState(false);
 
-  const [form, setForm] = useState({
-    document_category: 'Identity',
+  const emptyForm = {
+    document_category: '',
     document_title: '',
     issuing_authority: '',
     issue_date: ''
-  });
+  };
+
+  const [form, setForm] = useState(emptyForm);
   const [selectedFile, setSelectedFile] = useState(null);
+
+  const openUploadModal = () => {
+    setForm(emptyForm);
+    setSelectedFile(null);
+    setShowUploadModal(true);
+  };
 
   const handleUpload = async (e) => {
     e.preventDefault();
+    if (!form.document_category) {
+      showToast('Please select the document category.', 'error');
+      return;
+    }
     if (!selectedFile) {
       showToast('Please select a PDF or image document to upload.', 'error');
       return;
@@ -52,12 +64,7 @@ export default function Section10StatutoryDocs({ documents = [], onRefreshData, 
       showToast('Statutory document uploaded successfully.', 'success');
       setShowUploadModal(false);
       setSelectedFile(null);
-      setForm({
-        document_category: 'Identity',
-        document_title: '',
-        issuing_authority: '',
-        issue_date: ''
-      });
+      setForm(emptyForm);
       onRefreshData();
     } catch (err) {
       showToast(err.message, 'error');
@@ -96,7 +103,7 @@ export default function Section10StatutoryDocs({ documents = [], onRefreshData, 
 
         {!isLocked && (
           <button
-            onClick={() => setShowUploadModal(true)}
+            onClick={openUploadModal}
             className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow transition-colors flex items-center gap-1.5"
           >
             <Upload className="w-4 h-4" />
@@ -126,7 +133,7 @@ export default function Section10StatutoryDocs({ documents = [], onRefreshData, 
           </p>
           {!isLocked && (
             <button
-              onClick={() => setShowUploadModal(true)}
+              onClick={openUploadModal}
               className="mt-3 px-4 py-2 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700"
             >
               Upload First Document
@@ -234,7 +241,9 @@ export default function Section10StatutoryDocs({ documents = [], onRefreshData, 
                   value={form.document_category}
                   onChange={e => setForm({ ...form, document_category: e.target.value })}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs"
+                  required
                 >
+                  <option value="">Select Document Category...</option>
                   <option value="Identity">Identity & Address Proof (Voter ID, Passport, DL)</option>
                   <option value="Educational">Educational Degree / Transcript / Marks Memo</option>
                   <option value="Professional">Professional Qualification / NET / Council License</option>

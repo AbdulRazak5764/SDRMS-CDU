@@ -7,15 +7,22 @@ export default function Section8PreviousEmployment({ previousEmployment = [], on
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     employer_name: '',
     designation: '',
     department: '',
     employment_type: 'Regular',
     date_of_joining: '',
     date_of_leaving: '',
-    reason_for_leaving: 'Career advancement / Joined Chaitanya University'
-  });
+    reason_for_leaving: ''
+  };
+
+  const [form, setForm] = useState(emptyForm);
+
+  const openAddModal = () => {
+    setForm(emptyForm);
+    setShowAddModal(true);
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -43,15 +50,7 @@ export default function Section8PreviousEmployment({ previousEmployment = [], on
       if (!res.ok) throw new Error(data.error || 'Failed to record previous employment');
       showToast('Prior employment record added.', 'success');
       setShowAddModal(false);
-      setForm({
-        employer_name: '',
-        designation: '',
-        department: '',
-        employment_type: 'Regular',
-        date_of_joining: '',
-        date_of_leaving: '',
-        reason_for_leaving: 'Career advancement / Joined Chaitanya University'
-      });
+      setForm(emptyForm);
       onRefreshData();
     } catch (err) {
       showToast(err.message, 'error');
@@ -90,7 +89,7 @@ export default function Section8PreviousEmployment({ previousEmployment = [], on
 
         {!isLocked && (
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={openAddModal}
             className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow transition-colors flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
@@ -249,6 +248,7 @@ export default function Section8PreviousEmployment({ previousEmployment = [], on
                   name="reason_for_leaving"
                   value={form.reason_for_leaving}
                   onChange={handleChange}
+                  placeholder="e.g. Career advancement, Higher studies, Relocation"
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs"
                 />
               </div>

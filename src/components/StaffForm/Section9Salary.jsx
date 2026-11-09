@@ -3,12 +3,12 @@ import { DollarSign, ShieldCheck, Lock, Check } from 'lucide-react';
 
 export default function Section9Salary({ profile, onSaveDraft, isLocked }) {
   const [formData, setFormData] = useState({
-    pay_scale: profile.pay_scale || 'Academic Level 12 (79,800 - 2,11,500)',
-    basic_pay: profile.basic_pay || '89,900',
-    pay_components: profile.pay_components || 'DA (50%), HRA (27%), TA, Special Allowance',
-    payroll_code: profile.payroll_code || ('PAY-' + (profile.employee_id || '1001')),
-    salary_bank_name: profile.salary_bank_name || 'State Bank of India',
-    salary_account_masked: profile.salary_account_masked || 'XXXX-XXXX-6789'
+    pay_scale: profile.pay_scale || '',
+    basic_pay: profile.basic_pay || '',
+    pay_components: profile.pay_components || '',
+    payroll_code: profile.payroll_code || '',
+    salary_bank_name: profile.salary_bank_name || '',
+    salary_account_masked: profile.salary_account_masked || ''
   });
 
   const handleChange = (e) => {

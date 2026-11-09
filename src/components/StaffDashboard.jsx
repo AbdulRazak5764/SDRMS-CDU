@@ -1,584 +1,519 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   User, GraduationCap, Briefcase, BookOpen, Award, FileText, CheckCircle2,
-  Clock, ShieldCheck, Download, Bookmark, Video, Paperclip, Image, Edit3,
-  Grid, List, ChevronRight, Star, ArrowRight, TrendingUp, Sparkles, AlertCircle
+  Clock, ShieldCheck, Download, AlertCircle, ArrowRight, ExternalLink,
+  ChevronRight, Building2, CheckSquare, Layers, FolderCheck, Calendar, Sparkles
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function StaffDashboard({ profileData, onNavigateSection, onOpenPrintView, onOpenDocs }) {
+  const { user } = useAuth();
   const profile = profileData?.profile || {};
   const documents = profileData?.documents || [];
-  const omissions = profileData?.omissions || [];
+  const qualifications = profileData?.qualifications || [];
+  const experience = profileData?.experience || [];
+  const publications = profileData?.publications || [];
   const verificationLogs = profileData?.verificationLogs || [];
   const assignedHod = profileData?.assignedHod;
   const assignedDean = profileData?.assignedDean;
   const assignedRegistrar = profileData?.assignedRegistrar;
 
-  const completion = profile.completion_percentage || 100;
   const status = profile.workflow_status || 'Draft';
 
-  const [layoutMode, setLayoutMode] = useState('grid'); // 'grid' or 'list'
-  const [quickThought, setQuickThought] = useState('');
-  const [activeMenu, setActiveMenu] = useState('feeds'); // 'feeds', 'posts', 'courses', 'analytics', 'docs'
+  // Calculate real profile completion based on real filled data
+  const calculateRealCompletion = () => {
+    let score = 0;
+    if (profile.full_name && profile.employee_id && profile.dob) score += 20; // Personal
+    if (profile.designation && profile.department_name) score += 15; // Employment
+    if (qualifications.length > 0) score += 20; // Education
+    if (experience.length > 0) score += 15; // Experience
+    if (publications.length > 0) score += 10; // Research
+    if (documents.length > 0) score += 20; // Statutory Documents
+    return Math.min(100, score);
+  };
 
-  // Default portrait photo matching aesthetic
-  const defaultPhoto = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80';
+  const realCompletion = calculateRealCompletion();
 
-  // 6 Main Feature Cards for the Center Feed (exact layout from Image 3)
-  const centerFeedCards = [
+  // 9 Official Modules Config
+  const moduleCards = [
     {
-      id: 1,
-      title: 'UI / UX Trends in Higher Ed & Dossier Portal',
-      category: 'Design',
-      readTime: '30 mins read',
-      tag: 'Basic Personal Dossier',
-      description: 'Official name, date of birth, emergency contact, residential address, and verified digital credentials.',
-      stats: '100% Complete',
-      views: '512 views',
-      image: 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?auto=format&fit=crop&w=600&q=80',
-      section: 1
+      num: 1,
+      title: 'Module 1: Personal Dossier & Identity',
+      desc: 'SSC name, DOB, blood group, nationality, residential address & emergency contact.',
+      countText: profile.dob ? 'Personal details entered' : 'Incomplete',
+      isFilled: Boolean(profile.dob && profile.full_name),
+      icon: User,
+      color: 'blue'
     },
     {
-      id: 2,
-      title: 'Collegiate Degree Records & Ph.D. Registry',
-      category: 'Academics',
-      readTime: '25 mins read',
-      tag: 'Educational Qualifications',
-      description: `${profileData?.qualifications?.length || 3} degrees certified (Ph.D., M.Tech, B.Tech) with university mark sheets & transcripts.`,
-      stats: `${profileData?.qualifications?.length || 3} Verified`,
-      views: '600 views',
-      image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600&q=80',
-      section: 3
+      num: 2,
+      title: 'Module 2: Cadre & Service Placement',
+      desc: 'Designation, department, cadre, date of joining & university employee id.',
+      countText: profile.designation ? `${profile.designation}` : 'Awaiting entry',
+      isFilled: Boolean(profile.designation),
+      icon: Briefcase,
+      color: 'indigo'
     },
     {
-      id: 3,
-      title: 'Collegiate Teaching Experience & AI Workload',
-      category: 'Teaching',
-      readTime: '40 mins read',
-      tag: 'Teaching Experience',
-      description: 'Undergraduate & Postgraduate classroom pedagogy, student mentoring, labs, and modern curriculum design.',
-      stats: '8.3 Yrs Univ Exp',
-      views: '430 views',
-      image: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=600&q=80',
-      section: 5
+      num: 3,
+      title: 'Module 3: Educational Qualifications',
+      desc: 'Undergraduate, Postgraduate, and Doctorate degrees with degree marksheets.',
+      countText: qualifications.length > 0 ? `${qualifications.length} Degree(s) registered` : 'No qualifications added',
+      isFilled: qualifications.length > 0,
+      icon: GraduationCap,
+      color: 'purple'
     },
     {
-      id: 4,
-      title: 'Scopus & Web of Science Research Publications',
-      category: 'Research',
-      readTime: '35 mins read',
-      tag: 'Research & Publications',
-      description: `${profileData?.publications?.length || 2} indexed research articles in IEEE Transactions & Springer journals with high citations.`,
-      stats: 'Scopus / WoS Indexed',
-      views: '780 views',
-      image: 'https://images.unsplash.com/photo-1488190211105-8b0e65b80b4e?auto=format&fit=crop&w=600&q=80',
-      section: 6
+      num: 4,
+      title: 'Module 4: Statutory Eligibility & NET/GATE',
+      desc: 'UGC-NET, CSIR-NET, SLET/SET, GATE score, and State Council Registrations.',
+      countText: 'Statutory clearances',
+      isFilled: true,
+      icon: Award,
+      color: 'amber'
     },
     {
-      id: 5,
-      title: 'Sponsored Research Grants & AICTE Projects',
-      category: 'Grants',
-      readTime: '20 mins read',
-      tag: 'Funded Research',
-      description: 'DST-SERB funded AI-driven institutional records integrity project sanctioned for ₹28,50,000.',
-      stats: '₹28.5L Sanctioned',
-      views: '390 views',
-      image: 'https://images.unsplash.com/photo-1507668077129-56e32842fceb?auto=format&fit=crop&w=600&q=80',
-      section: 6
+      num: 5,
+      title: 'Module 5: Collegiate Teaching Experience',
+      desc: 'Collegiate pedagogy, courses taught, lab sessions, and student project guidance.',
+      countText: experience.length > 0 ? `${experience.length} Service record(s)` : 'Awaiting experience entry',
+      isFilled: experience.length > 0,
+      icon: Clock,
+      color: 'teal'
     },
     {
-      id: 6,
-      title: 'Statutory Documents Vault & Compliance Scans',
-      category: 'Compliance',
-      readTime: '15 mins read',
-      tag: 'Statutory Vault',
-      description: `${documents.length || 3} verified PDF scans including Appointment Orders, UGC-NET certificate, and Aadhaar card.`,
-      stats: `${documents.length || 3} Uploads`,
-      views: '640 views',
-      image: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=600&q=80',
-      section: 10
+      num: 6,
+      title: 'Module 6: Research Publications & Patents',
+      desc: 'Scopus & Web of Science indexed journal papers, conference proceedings, books.',
+      countText: publications.length > 0 ? `${publications.length} Publication(s)` : 'Awaiting research records',
+      isFilled: publications.length > 0,
+      icon: BookOpen,
+      color: 'rose'
+    },
+    {
+      num: 7,
+      title: 'Module 7: Sponsored Projects & Grants',
+      desc: 'Extramural research grants funded by DST, SERB, AICTE, UGC, or Industry.',
+      countText: 'Grants & Consultancies',
+      isFilled: true,
+      icon: Layers,
+      color: 'sky'
+    },
+    {
+      num: 8,
+      title: 'Module 8: FDPs, Workshops & Training',
+      desc: 'Faculty Development Programmes, AICTE-ATAL workshops, NPTEL MOOCs certified.',
+      countText: 'FDP Records',
+      isFilled: true,
+      icon: Award,
+      color: 'violet'
+    },
+    {
+      num: 9,
+      title: 'Module 9: Statutory Documents Vault',
+      desc: 'Mandatory certificates (Aadhaar, Degree Memos, Appointment Orders) verifiable PDF scans.',
+      countText: `${documents.length} Document(s) uploaded`,
+      isFilled: documents.length > 0,
+      icon: FileText,
+      color: 'blue'
+    },
+    {
+      num: 10,
+      title: 'Module 10: Clearance & Declaration',
+      desc: 'Code of conduct agreement, institutional declaration & multi-tier clearance routing.',
+      countText: status,
+      isFilled: status !== 'Draft',
+      icon: CheckSquare,
+      color: 'emerald'
     }
   ];
 
+  const getStatusBadge = (st) => {
+    switch (st) {
+      case 'Approved':
+        return { label: 'Approved & Sealed', bg: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
+      case 'Pending Registrar Approval':
+        return { label: 'Awaiting Registrar Seal', bg: 'bg-amber-100 text-amber-900 border-amber-300' };
+      case 'Pending Dean Approval':
+        return { label: 'Awaiting Dean Endorsement', bg: 'bg-purple-100 text-purple-900 border-purple-300' };
+      case 'Pending HOD Approval':
+        return { label: 'Awaiting HOD Scrutiny', bg: 'bg-blue-100 text-blue-800 border-blue-300' };
+      case 'Correction Required':
+        return { label: 'Returned for Correction', bg: 'bg-rose-100 text-rose-800 border-rose-300' };
+      default:
+        return { label: 'Draft (In Progress)', bg: 'bg-slate-100 text-slate-700 border-slate-300' };
+    }
+  };
+
+  const statusBadge = getStatusBadge(status);
+
   return (
     <div className="space-y-6">
-      {/* Correction Banner if Flagged */}
+      {/* Correction Notice Banner if returned by reviewer */}
       {status === 'Correction Required' && verificationLogs.length > 0 && (
-        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-3 text-xs text-rose-900 shadow-sm">
-          <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <span className="font-bold text-sm">Administrative Reviewer Remarks:</span>
-            <p className="mt-0.5 text-rose-800">
-              "{verificationLogs[0]?.remarks || 'Please review your records and address the flagged sections.'}"
-            </p>
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-rose-900 shadow-sm">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-sm block">Administrative Reviewer Remarks</span>
+              <p className="mt-0.5 text-rose-800">
+                "{verificationLogs[0]?.remarks || 'Please review your records and address the flagged sections.'}"
+              </p>
+            </div>
           </div>
           <button
             onClick={() => onNavigateSection(1)}
-            className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold text-xs shadow-sm transition-all"
+            className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 flex-shrink-0"
           >
-            Fix & Resubmit
+            <span>Rectify Dossier</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* THREE-COLUMN LAYOUT (Exact match to User Reference Image 3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* ========================================================= */}
-        {/* COLUMN 1: LEFT PROFILE CARD & SIDEBAR (3 of 12 columns)    */}
-        {/* ========================================================= */}
-        <div className="lg:col-span-3 space-y-5">
-          {/* Main User Card (Image 3 Left Profile Box) */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-sm text-center flex flex-col items-center">
-            {/* Circular Staff Photo */}
-            <div className="w-24 h-24 rounded-full border-4 border-slate-100 overflow-hidden bg-slate-50 shadow-md flex items-center justify-center relative mb-3">
-              <img
-                src={profile.photo_url || defaultPhoto}
-                alt={profile.full_name || 'Staff Member'}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = defaultPhoto;
-                }}
-              />
-            </div>
-
-            {/* Name and Designation */}
-            <h2 className="text-base font-extrabold text-slate-800 tracking-tight">
-              {profile.full_name || 'Dr. Ramesh Kumar Reddy'}
-            </h2>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">
-              {profile.designation || 'Assistant Professor'}
-            </p>
-            <p className="text-[11px] text-blue-600 font-semibold mt-0.5">
-              {profile.department_name || 'Computer Science & Engineering'}
-            </p>
-
-            {/* Stars Rating (4 gold stars + 1 hollow star like Image 3) */}
-            <div className="flex items-center gap-1 my-3 text-amber-400">
-              <Star className="w-4 h-4 fill-amber-400 stroke-amber-400" />
-              <Star className="w-4 h-4 fill-amber-400 stroke-amber-400" />
-              <Star className="w-4 h-4 fill-amber-400 stroke-amber-400" />
-              <Star className="w-4 h-4 fill-amber-400 stroke-amber-400" />
-              <Star className="w-4 h-4 text-slate-300 stroke-slate-300" />
-            </div>
-
-            {/* Blue Pill Button: VIEW PROFILE (Matches Image 3) */}
-            <button
-              onClick={() => onNavigateSection(1)}
-              className="w-full py-2.5 px-6 rounded-full bg-[#3865F6] hover:bg-[#2554EB] text-white font-bold text-xs tracking-wider uppercase shadow-md shadow-blue-500/20 transition-all mt-1 mb-4"
-            >
-              VIEW PROFILE
-            </button>
-
-            {/* Stats Row with mini curve & connections (Matches Image 3) */}
-            <div className="w-full pt-4 border-t border-slate-100 flex items-center justify-around text-center">
-              <div>
-                <div className="text-lg font-black text-slate-800">
-                  {profile.calculated_univ_exp_years || '8.3'}
+      {/* Top Academic Profile Summary Card */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs">
+        <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
+          {/* Avatar and Basic Details */}
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
+            {/* Real Photo or Initials Avatar */}
+            <div className="w-24 h-24 rounded-2xl bg-blue-50 border-2 border-blue-200 shadow-inner flex items-center justify-center overflow-hidden flex-shrink-0">
+              {profile.photo_url ? (
+                <img
+                  src={profile.photo_url}
+                  alt={profile.full_name || 'Staff Member'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-blue-700">
+                  <span className="text-2xl font-black">
+                    {(profile.full_name || user?.full_name || 'U').charAt(0).toUpperCase()}
+                  </span>
+                  <span className="text-[10px] font-semibold text-blue-500 mt-0.5">Faculty</span>
                 </div>
-                <div className="text-[11px] text-slate-400 font-medium">Univ Exp (Yrs)</div>
-              </div>
-
-              <div className="h-8 w-px bg-slate-200" />
-
-              <div className="flex flex-col items-center">
-                <div className="flex items-center gap-1">
-                  {/* Decorative Mini Sparkline Curve SVG (Matches Image 3) */}
-                  <svg className="w-10 h-4 text-purple-500" viewBox="0 0 40 16" fill="none">
-                    <path
-                      d="M2 13 Q 10 2, 20 10 T 36 4"
-                      stroke="#8B5CF6"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                    />
-                    <circle cx="36" cy="4" r="2.5" fill="#8B5CF6" />
-                  </svg>
-                  <span className="text-xs font-bold text-slate-800">{completion}%</span>
-                </div>
-                <div className="text-[11px] text-slate-400 font-medium">Activity Level</div>
-              </div>
+              )}
             </div>
-          </div>
 
-          {/* Left Vertical Navigation Menu (Matches Image 3 list) */}
-          <div className="bg-white rounded-3xl border border-slate-200/70 shadow-sm p-3.5 space-y-1">
-            <button
-              onClick={() => setActiveMenu('feeds')}
-              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
-                activeMenu === 'feeds'
-                  ? 'text-blue-600 bg-blue-50/80 shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span>New Feeds</span>
-              {activeMenu === 'feeds' && <ChevronRight className="w-4 h-4 text-blue-600" />}
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveMenu('posts');
-                onNavigateSection(1);
-              }}
-              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
-                activeMenu === 'posts'
-                  ? 'text-blue-600 bg-blue-50/80 shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span>My Post / Dossier</span>
-              {activeMenu === 'posts' && <ChevronRight className="w-4 h-4 text-blue-600" />}
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveMenu('courses');
-                onNavigateSection(3);
-              }}
-              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
-                activeMenu === 'courses'
-                  ? 'text-blue-600 bg-blue-50/80 shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span>Courses & Degrees</span>
-              <ChevronRight className="w-4 h-4 text-blue-600" />
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveMenu('analytics');
-                onNavigateSection(5);
-              }}
-              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
-                activeMenu === 'analytics'
-                  ? 'text-blue-600 bg-blue-50/80 shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span>Analytics & Workload</span>
-              {activeMenu === 'analytics' && <ChevronRight className="w-4 h-4 text-blue-600" />}
-            </button>
-
-            <button
-              onClick={onOpenPrintView}
-              className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"
-            >
-              <span>Print Official Dossier</span>
-              <Download className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          </div>
-        </div>
-
-        {/* ========================================================= */}
-        {/* COLUMN 2: CENTER MAIN CONTENT FEED (6 of 12 columns)       */}
-        {/* ========================================================= */}
-        <div className="lg:col-span-6 space-y-5">
-          {/* Clearance Pathway Stepper Card */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm space-y-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-blue-600" />
-                <span className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
-                  Dossier Clearance Pathway
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                <h1 className="text-xl font-bold text-slate-900">
+                  {[profile.salutation || user?.salutation, profile.full_name || user?.full_name].filter(Boolean).join(' ') || 'Faculty Member'}
+                </h1>
+                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusBadge.bg}`}>
+                  {statusBadge.label}
                 </span>
               </div>
-              <span className={`text-[10px] font-bold px-3 py-1 rounded-full border ${
-                status === 'Approved' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
-                status === 'Pending Registrar Approval' ? 'bg-amber-100 text-amber-900 border-amber-300' :
-                status === 'Pending Dean Approval' ? 'bg-purple-100 text-purple-900 border-purple-300' :
-                status === 'Pending HOD Approval' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                status === 'Correction Required' ? 'bg-rose-100 text-rose-800 border-rose-300' :
-                'bg-slate-100 text-slate-700 border-slate-300'
-              }`}>
-                Stage: {status}
+
+              <p className="text-sm font-semibold text-blue-700">
+                {profile.designation || 'Assistant Professor'}
+              </p>
+
+              <p className="text-xs text-slate-600 font-medium">
+                {profile.department_name || 'Department of Computer Science & Engineering'}
+              </p>
+
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 pt-2 text-xs text-slate-500 font-mono">
+                <span>
+                  <strong className="text-slate-700 font-sans">Emp ID:</strong> {profile.employee_id || user?.employee_id || 'Not Assigned'}
+                </span>
+                <span>•</span>
+                <span>
+                  <strong className="text-slate-700 font-sans">Official Email:</strong> {profile.official_email || user?.email || 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Action Buttons & Real Completion Meter */}
+          <div className="flex flex-col items-center sm:items-end gap-3 w-full sm:w-auto">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 w-full sm:w-64 text-center sm:text-right">
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="font-semibold text-slate-600">Dossier Health</span>
+                <span className="font-bold text-blue-700">{realCompletion}%</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${realCompletion}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-slate-500 block mt-1">
+                {realCompletion >= 80 ? 'Ready for administrative submission' : 'Complete remaining modules to submit'}
               </span>
             </div>
 
-            {/* 3 Step Visual Flow */}
-            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-              <div className={`p-2.5 rounded-2xl border transition-all ${
-                status !== 'Draft' ? 'bg-blue-50/80 border-blue-300' : 'bg-slate-50 border-slate-200'
-              }`}>
-                <div className="w-5 h-5 mx-auto rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold mb-1">
-                  1
-                </div>
-                <div className="font-extrabold text-[11px] text-slate-900 truncate">
-                  {assignedHod?.name || 'Department HOD'}
-                </div>
-                <div className="text-[10px] text-slate-400">Level 1 Scrutiny</div>
-              </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => onNavigateSection(1)}
+                className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-1.5"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Edit 10 Modules</span>
+              </button>
 
-              <div className={`p-2.5 rounded-2xl border transition-all ${
-                ['Pending Dean Approval', 'Pending Registrar Approval', 'Approved'].includes(status)
-                  ? 'bg-purple-50/80 border-purple-300' : 'bg-slate-50 border-slate-200 opacity-70'
-              }`}>
-                <div className="w-5 h-5 mx-auto rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold mb-1">
-                  2
-                </div>
-                <div className="font-extrabold text-[11px] text-slate-900 truncate">
-                  {assignedDean?.name || 'Dean of Faculty'}
-                </div>
-                <div className="text-[10px] text-slate-400">Level 2 Endorsement</div>
-              </div>
-
-              <div className={`p-2.5 rounded-2xl border transition-all ${
-                status === 'Approved' ? 'bg-emerald-50 border-emerald-300' :
-                status === 'Pending Registrar Approval' ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200 opacity-70'
-              }`}>
-                <div className="w-5 h-5 mx-auto rounded-full bg-amber-600 text-white flex items-center justify-center text-[10px] font-bold mb-1">
-                  3
-                </div>
-                <div className="font-extrabold text-[11px] text-slate-900 truncate">
-                  Prof. M. Ravinder
-                </div>
-                <div className="text-[10px] text-slate-400">Final University Seal</div>
-              </div>
+              <button
+                onClick={onOpenPrintView}
+                className="flex-1 sm:flex-none px-4 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span>Print Dossier</span>
+              </button>
             </div>
+          </div>
+        </div>
+      </div>
 
-            {/* Reviewer Feedback / Remarks Callout if available */}
-            {(profile.hod_remarks || profile.dean_remarks || profile.registrar_remarks) && (
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
-                {profile.hod_remarks && (
-                  <div className="text-indigo-900">
-                    <strong>HOD Feedback:</strong> "{profile.hod_remarks}"
-                  </div>
-                )}
-                {profile.dean_remarks && (
-                  <div className="text-purple-900">
-                    <strong>Dean Feedback:</strong> "{profile.dean_remarks}"
-                  </div>
-                )}
-                {profile.registrar_remarks && (
-                  <div className="text-amber-900">
-                    <strong>Registrar Seal:</strong> "{profile.registrar_remarks}"
-                  </div>
-                )}
+      {/* Institutional Multi-Tier Clearance Pathway */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-blue-600" />
+            <h2 className="text-sm font-bold text-slate-900">
+              Institutional Dossier Clearance Protocol
+            </h2>
+          </div>
+          <span className="text-xs text-slate-500">
+            Three-Stage Verification Workflow
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Step 1: HOD */}
+          <div className={`p-4 rounded-xl border transition-all ${
+            status !== 'Draft' ? 'bg-blue-50/70 border-blue-200' : 'bg-slate-50 border-slate-200'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                1
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                status !== 'Draft' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+              }`}>
+                Stage 1
+              </span>
+            </div>
+            <div className="font-bold text-xs text-slate-900 truncate">
+              {assignedHod?.name || 'Department Head (HOD)'}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Level 1 Scrutiny & Teaching Load Audit
+            </div>
+          </div>
+
+          {/* Step 2: Dean */}
+          <div className={`p-4 rounded-xl border transition-all ${
+            ['Pending Dean Approval', 'Pending Registrar Approval', 'Approved'].includes(status)
+              ? 'bg-purple-50/70 border-purple-200'
+              : 'bg-slate-50 border-slate-200 opacity-70'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold">
+                2
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                ['Pending Dean Approval', 'Pending Registrar Approval', 'Approved'].includes(status)
+                  ? 'bg-purple-100 text-purple-800'
+                  : 'bg-slate-200 text-slate-600'
+              }`}>
+                Stage 2
+              </span>
+            </div>
+            <div className="font-bold text-xs text-slate-900 truncate">
+              {assignedDean?.name || 'Dean of Faculty'}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Level 2 Academic & Cadre Endorsement
+            </div>
+          </div>
+
+          {/* Step 3: Registrar */}
+          <div className={`p-4 rounded-xl border transition-all ${
+            status === 'Approved'
+              ? 'bg-emerald-50/70 border-emerald-200'
+              : status === 'Pending Registrar Approval'
+              ? 'bg-amber-50/70 border-amber-200'
+              : 'bg-slate-50 border-slate-200 opacity-70'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold">
+                3
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                status === 'Approved'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : status === 'Pending Registrar Approval'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-slate-200 text-slate-600'
+              }`}>
+                Final Seal
+              </span>
+            </div>
+            <div className="font-bold text-xs text-slate-900 truncate">
+              Office of the Registrar
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Office of Registrar Institutional Seal
+            </div>
+          </div>
+        </div>
+
+        {/* Reviewer Feedback Logs */}
+        {(profile.hod_remarks || profile.dean_remarks || profile.registrar_remarks) && (
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5 mt-2">
+            {profile.hod_remarks && (
+              <div className="text-blue-900">
+                <span className="font-bold">HOD Remarks:</span> "{profile.hod_remarks}"
+              </div>
+            )}
+            {profile.dean_remarks && (
+              <div className="text-purple-900">
+                <span className="font-bold">Dean Remarks:</span> "{profile.dean_remarks}"
+              </div>
+            )}
+            {profile.registrar_remarks && (
+              <div className="text-amber-900">
+                <span className="font-bold">Registrar Seal Remarks:</span> "{profile.registrar_remarks}"
               </div>
             )}
           </div>
-          {/* Top "Share your thoughts" Card (Matches Image 3) */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200/70 shadow-sm space-y-3">
-            <input
-              type="text"
-              value={quickThought}
-              onChange={(e) => setQuickThought(e.target.value)}
-              placeholder="Share your thoughts..."
-              className="w-full bg-transparent border-0 text-xs text-slate-700 placeholder-slate-400 focus:outline-hidden focus:ring-0"
-            />
+        )}
+      </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-4 text-slate-400">
-                <button
-                  type="button"
-                  onClick={() => onNavigateSection(10)}
-                  className="hover:text-blue-600 transition-colors p-1"
-                  title="Upload Video / Media"
-                >
-                  <Video className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateSection(10)}
-                  className="hover:text-blue-600 transition-colors p-1"
-                  title="Upload Document / PDF"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateSection(1)}
-                  className="hover:text-blue-600 transition-colors p-1"
-                  title="Upload Photo"
-                >
-                  <Image className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateSection(12)}
-                  className="hover:text-blue-600 transition-colors p-1"
-                  title="Edit Notes"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-              </div>
+      {/* Real 9-Module Academic Dossier Matrix */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <FolderCheck className="w-4 h-4 text-blue-600" />
+            <span>Staff Digital Records Management System (10 Core Modules)</span>
+          </h2>
+          <span className="text-xs text-slate-500">Click any module to inspect or edit</span>
+        </div>
 
-              {/* Royal Blue Pill POST Button (Image 3) */}
-              <button
-                onClick={() => onNavigateSection(1)}
-                className="px-6 py-2 rounded-full bg-[#3865F6] hover:bg-[#2554EB] text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all uppercase tracking-wider"
-              >
-                POST
-              </button>
-            </div>
-          </div>
-
-          {/* Sort By & Layout Switcher Bar (Matches Image 3) */}
-          <div className="flex items-center justify-between text-xs text-slate-500 px-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-500">Sort By :</span>
-              <span className="px-3.5 py-1 rounded-full bg-[#3865F6] text-white font-bold text-[11px] cursor-pointer flex items-center gap-1 shadow-xs">
-                RECENT ▾
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-400">Layout :</span>
-              <button
-                onClick={() => setLayoutMode('grid')}
-                className={`p-1.5 rounded-lg transition-colors ${layoutMode === 'grid' ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <Grid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setLayoutMode('list')}
-                className={`p-1.5 rounded-lg transition-colors ${layoutMode === 'list' ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Feed Cards (Grid 2-column or List) */}
-          <div className={layoutMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-5' : 'space-y-4'}>
-            {centerFeedCards.map((card) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {moduleCards.map((mod) => {
+            const ModIcon = mod.icon;
+            return (
               <div
-                key={card.id}
-                className="bg-white rounded-3xl border border-slate-200/70 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group"
+                key={mod.num}
+                onClick={() => onNavigateSection(mod.num)}
+                className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs hover:shadow-md hover:border-blue-400 transition-all cursor-pointer flex flex-col justify-between group"
               >
                 <div>
-                  {/* Card Illustration / 16:9 Image */}
-                  <div className="h-36 w-full bg-slate-100 overflow-hidden relative">
-                    <img
-                      src={card.image}
-                      alt={card.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    {/* Yellow Bookmark Ribbon (Image 3) */}
-                    <div className="absolute top-3 right-3">
-                      <Bookmark className="w-4 h-4 text-amber-500 fill-amber-400 filter drop-shadow-xs cursor-pointer" />
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 group-hover:bg-blue-600 group-hover:text-white transition-colors flex items-center justify-center font-bold text-xs">
+                      {mod.num}
                     </div>
+                    {mod.isFilled ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>Entered</span>
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                        Pending
+                      </span>
+                    )}
                   </div>
 
-                  {/* Card Body */}
-                  <div className="p-5 space-y-2">
-                    <h3 className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors leading-snug line-clamp-1">
-                      {card.title}
-                    </h3>
-                    <div className="text-[11px] text-slate-400 font-medium">
-                      {card.category} . {card.readTime}
-                    </div>
-                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed pt-1">
-                      {card.description}
-                    </p>
-                  </div>
+                  <h3 className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition-colors leading-snug">
+                    {mod.title}
+                  </h3>
+
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                    {mod.desc}
+                  </p>
                 </div>
 
-                {/* Card Footer */}
-                <div className="px-5 py-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-[11px] text-slate-400 font-medium">{card.views}</span>
-                  <button
-                    onClick={() => onNavigateSection(card.section)}
-                    className="font-bold text-blue-600 hover:text-blue-700 tracking-wider uppercase text-[11px] flex items-center gap-1 group-hover:gap-1.5 transition-all"
-                  >
-                    <span>VIEW MORE</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
+                <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-[11px] font-medium text-slate-600">
+                    {mod.countText}
+                  </span>
+                  <span className="text-blue-600 group-hover:translate-x-1 transition-transform flex items-center gap-0.5 text-[11px] font-bold">
+                    <span>Open</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </span>
                 </div>
               </div>
-            ))}
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Statutory Document Compliance & University Notice Board */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Statutory Vault Status */}
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Statutory Compliance Documents Vault</span>
+            </h3>
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+              {documents.length} / 5 Verified
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-600 leading-relaxed">
+            As per UGC and university regulatory guidelines, every faculty member must upload verifiable PDF scans of their educational degrees, appointment letter, and identity proofs.
+          </p>
+
+          <div className="space-y-2 pt-1 text-xs">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+              <span className="font-medium text-slate-700">1. Highest Degree (Ph.D. / PG Certificate)</span>
+              <span className="text-[11px] text-slate-500">Mandatory</span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+              <span className="font-medium text-slate-700">2. Official Appointment & Joining Order</span>
+              <span className="text-[11px] text-slate-500">Mandatory</span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+              <span className="font-medium text-slate-700">3. Government Identity Proof (Aadhaar / PAN)</span>
+              <span className="text-[11px] text-slate-500">Mandatory</span>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={() => onNavigateSection(9)}
+              className="w-full py-2 bg-slate-100 hover:bg-blue-50 text-blue-700 hover:text-blue-800 border border-slate-200 hover:border-blue-300 rounded-xl text-xs font-bold transition-all text-center"
+            >
+              Manage Documents Vault (Module 9)
+            </button>
           </div>
         </div>
 
-        {/* ========================================================= */}
-        {/* COLUMN 3: RIGHT QUICK ACCESS & TRENDING (3 of 12 columns)  */}
-        {/* ========================================================= */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Quick Access Rounded Badge Tags (Image 3 Right Top) */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-800 tracking-wider">
-              Quick Access
+        {/* University Official Circulars & Compliance Notice */}
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-blue-600" />
+              <span>Chaitanya University Regulatory Notices</span>
             </h3>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'UI/UX DESIGN', sec: 1 },
-                { label: 'TECHNOLOGY', sec: 5 },
-                { label: 'SALES', sec: 2 },
-                { label: 'BUSINESS DEV', sec: 6 },
-                { label: 'MACHINE LEARN', sec: 6 },
-                { label: 'WRITING', sec: 10 }
-              ].map((pill, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onNavigateSection(pill.sec)}
-                  className="px-3 py-2 rounded-full bg-white hover:bg-blue-50/70 border border-slate-200/80 hover:border-blue-300 text-[10px] font-bold text-slate-600 hover:text-blue-600 uppercase tracking-wider transition-all shadow-2xs text-center truncate"
-                >
-                  {pill.label}
-                </button>
-              ))}
-            </div>
+            <span className="text-xs text-slate-400">Institutional</span>
           </div>
 
-          {/* Trending Courses / Status Cards (Pastel Colors like Image 3) */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-800 tracking-wider">
-              Trending Courses
-            </h3>
-
-            {/* 1. Purple Card: Web Development (Exact match to Image 3) */}
-            <div
-              onClick={() => onNavigateSection(12)}
-              className="bg-[#6979F8] hover:bg-[#5b6bf0] text-white rounded-2xl p-4 shadow-sm cursor-pointer transition-all space-y-0.5"
-            >
-              <div className="text-sm font-bold tracking-tight">
-                Web Development
+          <div className="space-y-3 pt-1">
+            <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-200 text-xs space-y-1">
+              <div className="flex items-center justify-between font-bold text-blue-900">
+                <span>Annual Faculty Record Verification Cycle 2026</span>
+                <span className="text-[10px] text-blue-700">Ref: CDU/REG/2026/01</span>
               </div>
-              <div className="text-[11px] text-white/80 font-medium">
-                Development . 25 mins read
-              </div>
+              <p className="text-[11px] text-blue-800 leading-relaxed">
+                All appointed faculty members are requested to complete all 9 modules of the Staff Digital Records Management System (SDRMS) for career advancement scheme (CAS) and statutory audits.
+              </p>
             </div>
 
-            {/* 2. Mint Green Card: Robotics Learning (Exact match to Image 3) */}
-            <div
-              onClick={() => onNavigateSection(3)}
-              className="bg-[#5CD69D] hover:bg-[#4bc78e] text-white rounded-2xl p-4 shadow-sm cursor-pointer transition-all space-y-0.5"
-            >
-              <div className="text-sm font-bold tracking-tight">
-                Robotics Learning
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <div className="flex items-center justify-between font-bold text-slate-800">
+                <span>NAAC & NIRF Data Synchronization</span>
+                <span className="text-[10px] text-slate-500">Criterion 2</span>
               </div>
-              <div className="text-[11px] text-white/80 font-medium">
-                Information . 40 mins read
-              </div>
-            </div>
-
-            {/* 3. Warm Golden Yellow Card: Practical Sales Techniques (Exact match to Image 3) */}
-            <div
-              onClick={() => onNavigateSection(2)}
-              className="bg-[#FFCE56] hover:bg-[#f5c345] text-slate-900 rounded-2xl p-4 shadow-sm cursor-pointer transition-all space-y-0.5"
-            >
-              <div className="text-sm font-bold tracking-tight">
-                Practical Sales Techniques
-              </div>
-              <div className="text-[11px] text-slate-800/80 font-medium">
-                Sales . 25 mins read
-              </div>
-            </div>
-
-            {/* 4. Soft Pastel Pink / Rose Card: Databases (Exact match to Image 3) */}
-            <div
-              onClick={() => onNavigateSection(10)}
-              className="bg-[#FF8DA1] hover:bg-[#f77b92] text-white rounded-2xl p-4 shadow-sm cursor-pointer transition-all space-y-0.5"
-            >
-              <div className="text-sm font-bold tracking-tight">
-                Databases
-              </div>
-              <div className="text-[11px] text-white/80 font-medium">
-                Development . 50 mins read
-              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Publications indexed in Scopus, Web of Science, and UGC Care list entered in Module 6 will directly populate the university's institutional ranking dossiers.
+              </p>
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

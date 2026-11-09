@@ -34,6 +34,16 @@ export default function DocumentViewerModal({ document, onClose }) {
           <div className="flex items-center gap-2">
             <a
               href={fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+              title="Open document in new browser tab"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Open in Tab</span>
+            </a>
+            <a
+              href={fileUrl}
               download={document.original_filename}
               className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
             >

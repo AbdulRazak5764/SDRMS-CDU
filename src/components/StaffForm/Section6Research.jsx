@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { BookOpen, Plus, Trash2, CheckCircle2, FileText, Award, ShieldAlert } from 'lucide-react';
+import {
+  BookOpen, Plus, Trash2, CheckCircle2, FileText, Award, ShieldAlert,
+  Sparkles, Zap, Loader2, AlertCircle, ExternalLink, Layers, Check
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function Section6Research({
@@ -16,29 +19,174 @@ export default function Section6Research({
 
   // Modals state
   const [showPubModal, setShowPubModal] = useState(false);
+  const [showBulkDoiModal, setShowBulkDoiModal] = useState(false);
   const [showProjModal, setShowProjModal] = useState(false);
   const [showPatentModal, setShowPatentModal] = useState(false);
   const [showContribModal, setShowContribModal] = useState(false);
 
+  // Single DOI auto-fill state
+  const [doiInput, setDoiInput] = useState('');
+  const [fetchingDoi, setFetchingDoi] = useState(false);
+  const [doiStatus, setDoiStatus] = useState(null);
+
+  // Bulk DOI batch import state (for 80+ papers)
+  const [bulkDoiText, setBulkDoiText] = useState('');
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState(null);
+
   // Forms
-  const [pubForm, setPubForm] = useState({
-    title: '', authors: '', journal_or_conf_name: '', publication_year: 2024,
-    volume: '', issue: '', page_numbers: '', doi: '', indexing: 'Scopus, Web of Science', url: ''
-  });
-
-  const [projForm, setProjForm] = useState({
-    title: '', funding_agency: 'DST-SERB', role: 'Principal Investigator',
-    sanctioned_amount: 1500000, duration: '3 Years', status: 'Ongoing'
-  });
-
-  const [patentForm, setPatentForm] = useState({
+  const emptyPubForm = {
+    title: '', authors: '', journal_or_conf_name: '', publication_year: '',
+    volume: '', issue: '', page_numbers: '', doi: '', indexing: '', url: ''
+  };
+  const emptyProjForm = {
+    title: '', funding_agency: '', role: 'Principal Investigator',
+    sanctioned_amount: '', duration: '', status: 'Ongoing'
+  };
+  const emptyPatentForm = {
     title: '', application_number: '', filing_date: '', grant_number: '',
-    grant_date: '', applicant_inventors: '', status: 'Filed'
-  });
+    grant_date: '', applicant_inventors: '', status: ''
+  };
+  const emptyContribForm = {
+    category: '', title_or_activity: '', details: '', academic_year: ''
+  };
 
-  const [contribForm, setContribForm] = useState({
-    category: 'Book / Book Chapter', title_or_activity: '', details: '', academic_year: '2023-2024'
-  });
+  const [pubForm, setPubForm] = useState(emptyPubForm);
+  const [projForm, setProjForm] = useState(emptyProjForm);
+  const [patentForm, setPatentForm] = useState(emptyPatentForm);
+  const [contribForm, setContribForm] = useState(emptyContribForm);
+
+  const openPubModal = () => {
+    setPubForm(emptyPubForm);
+    setDoiInput('');
+    setDoiStatus(null);
+    setShowPubModal(true);
+  };
+  const openProjModal = () => { setProjForm(emptyProjForm); setShowProjModal(true); };
+  const openPatentModal = () => { setPatentForm(emptyPatentForm); setShowPatentModal(true); };
+  const openContribModal = () => { setContribForm(emptyContribForm); setShowContribModal(true); };
+
+  // Helper: Auto-fetch paper metadata from DOI via official CrossRef API
+  const handleFetchSingleDoi = async (doiToFetch) => {
+    const raw = (doiToFetch || doiInput || pubForm.doi || '').trim();
+    if (!raw) {
+      setDoiStatus({ type: 'error', message: 'Please enter or paste a DOI link (e.g. 10.1109/...) first.' });
+      return;
+    }
+    setFetchingDoi(true);
+    setDoiStatus(null);
+    try {
+      const res = await fetch(`/api/staff/fetch-doi?doi=${encodeURIComponent(raw)}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('sdrms_token')}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch publication metadata');
+
+      setPubForm(prev => ({
+        ...prev,
+        title: data.title || prev.title,
+        authors: data.authors || prev.authors,
+        journal_or_conf_name: data.journal_or_conf_name || prev.journal_or_conf_name,
+        publication_year: data.publication_year || prev.publication_year,
+        volume: data.volume || prev.volume,
+        issue: data.issue || prev.issue,
+        page_numbers: data.page_numbers || prev.page_numbers,
+        doi: data.doi || prev.doi,
+        indexing: data.indexing || prev.indexing || 'Scopus, Web of Science, UGC-CARE',
+        url: data.url || prev.url
+      }));
+
+      setDoiStatus({
+        type: 'success',
+        message: `Verified: "${(data.title || '').substring(0, 55)}..." (${data.publication_year})`
+      });
+      showToast('Publication details auto-filled successfully!', 'success');
+    } catch (err) {
+      setDoiStatus({ type: 'error', message: err.message });
+      showToast(err.message, 'error');
+    } finally {
+      setFetchingDoi(false);
+    }
+  };
+
+  // Helper: Bulk import up to 80+ papers from a list of DOIs
+  const handleBulkImport = async () => {
+    const lines = bulkDoiText
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 5);
+
+    if (lines.length === 0) {
+      showToast('Please paste at least one DOI (e.g. 10.1109/...)', 'error');
+      return;
+    }
+
+    setBulkImporting(true);
+    setBulkProgress({ current: 0, total: lines.length, currentTitle: 'Connecting to CrossRef registry...' });
+    const fetchedPapers = [];
+    const failedDois = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      setBulkProgress({
+        current: i + 1,
+        total: lines.length,
+        currentTitle: `Fetching ${i + 1}/${lines.length}: ${line.substring(0, 35)}...`
+      });
+
+      try {
+        const res = await fetch(`/api/staff/fetch-doi?doi=${encodeURIComponent(line)}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('sdrms_token')}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.title && data.journal_or_conf_name) {
+            fetchedPapers.push(data);
+          } else {
+            failedDois.push(line);
+          }
+        } else {
+          failedDois.push(line);
+        }
+      } catch (err) {
+        failedDois.push(line);
+      }
+    }
+
+    if (fetchedPapers.length > 0) {
+      setBulkProgress({
+        current: lines.length,
+        total: lines.length,
+        currentTitle: `Saving ${fetchedPapers.length} papers to institutional database...`
+      });
+      try {
+        const saveRes = await fetch('/api/staff/bulk-publications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('sdrms_token')}`
+          },
+          body: JSON.stringify({ publications: fetchedPapers })
+        });
+        const saveJson = await saveRes.json();
+        if (saveRes.ok) {
+          showToast(`Successfully imported ${fetchedPapers.length} publications!`, 'success');
+          setShowBulkDoiModal(false);
+          setBulkDoiText('');
+          onRefreshData();
+        } else {
+          throw new Error(saveJson.error || 'Failed to save imported papers');
+        }
+      } catch (saveErr) {
+        showToast(saveErr.message, 'error');
+      }
+    } else {
+      showToast('Could not fetch papers from the provided DOIs. Please check DOI numbers.', 'error');
+    }
+
+    setBulkImporting(false);
+    setBulkProgress(null);
+  };
 
   // Add Publication
   const handleAddPub = async (e) => {
@@ -202,15 +350,31 @@ export default function Section6Research({
           {/* Sub Tab: Publications */}
           {activeTab === 'pubs' && (
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-semibold text-slate-700">Indexed Journal Articles & Conference Proceedings</span>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                  <span className="text-xs font-semibold text-slate-700">Indexed Journal Articles & Conference Proceedings</span>
+                  <span className="block text-[10px] text-slate-500">Auto-fetch metadata via DOI or bulk import up to 100+ papers at once</span>
+                </div>
                 {!isLocked && (
-                  <button
-                    onClick={() => setShowPubModal(true)}
-                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add Publication
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowBulkDoiModal(true)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                      title="Paste a list of DOIs to automatically import 80+ papers at once"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Bulk Import DOIs (80+ Papers)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openPubModal}
+                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Publication</span>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -253,7 +417,7 @@ export default function Section6Research({
                 <span className="text-xs font-semibold text-slate-700">Externally Funded / Institutional Research Projects</span>
                 {!isLocked && (
                   <button
-                    onClick={() => setShowProjModal(true)}
+                    onClick={openProjModal}
                     className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Project
@@ -297,7 +461,7 @@ export default function Section6Research({
                 <span className="text-xs font-semibold text-slate-700">Intellectual Property & Patents (Filed / Published / Granted)</span>
                 {!isLocked && (
                   <button
-                    onClick={() => setShowPatentModal(true)}
+                    onClick={openPatentModal}
                     className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Patent
@@ -334,7 +498,7 @@ export default function Section6Research({
                 <span className="text-xs font-semibold text-slate-700">Books, Book Chapters, Awards & Ph.D. Supervision</span>
                 {!isLocked && (
                   <button
-                    onClick={() => setShowContribModal(true)}
+                    onClick={openContribModal}
                     className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Entry
@@ -371,109 +535,305 @@ export default function Section6Research({
       {showPubModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 my-8">
-            <h3 className="text-base font-bold text-slate-900 border-b pb-2">Add Research Publication</h3>
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-teal-600" />
+                Add Research Publication
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPubModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Smart DOI Auto-Fetch Box */}
+            <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+                  Instant Auto-Fill via DOI / CrossRef
+                </span>
+                <span className="text-[10px] font-semibold text-blue-600 bg-blue-100/70 px-2 py-0.5 rounded-full">
+                  100% Automated
+                </span>
+              </div>
+              <p className="text-[11px] text-blue-800">
+                Paste any DOI or link (IEEE, Springer, Elsevier, Nature, Wiley, etc.) to automatically fill all fields.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={doiInput}
+                  onChange={(e) => setDoiInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleFetchSingleDoi(doiInput); } }}
+                  placeholder="e.g. 10.1109/TSE.2023.3241289 or https://doi.org/..."
+                  className="flex-1 bg-white border border-blue-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-blue-500 font-mono"
+                  disabled={fetchingDoi}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleFetchSingleDoi(doiInput)}
+                  disabled={fetchingDoi}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                >
+                  {fetchingDoi ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Fetching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>Auto-Fill</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {doiStatus && (
+                <div className={`p-2 rounded-lg text-[11px] flex items-center gap-1.5 ${
+                  doiStatus.type === 'success'
+                    ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                    : 'bg-rose-100 text-rose-900 border border-rose-300'
+                }`}>
+                  {doiStatus.type === 'success' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  )}
+                  <span className="font-medium truncate">{doiStatus.message}</span>
+                </div>
+              )}
+            </div>
+
             <form onSubmit={handleAddPub} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold mb-1">Paper Title *</label>
+                <label className="block text-xs font-semibold mb-1 text-slate-700">Paper Title *</label>
                 <input
                   type="text"
                   value={pubForm.title}
                   onChange={e => setPubForm({ ...pubForm, title: e.target.value })}
                   placeholder="Full title of publication"
-                  className="w-full border rounded-lg p-2 text-xs"
+                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-teal-600"
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Authors *</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-700">Authors *</label>
                   <input
                     type="text"
                     value={pubForm.authors}
                     onChange={e => setPubForm({ ...pubForm, authors: e.target.value })}
                     placeholder="e.g. R. K. Reddy, K. V. S. Sharma"
-                    className="w-full border rounded-lg p-2 text-xs"
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-teal-600"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Publication Year *</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-700">Publication Year *</label>
                   <input
                     type="number"
                     value={pubForm.publication_year}
-                    onChange={e => setPubForm({ ...pubForm, publication_year: parseInt(e.target.value) })}
-                    className="w-full border rounded-lg p-2 text-xs"
+                    onChange={e => setPubForm({ ...pubForm, publication_year: parseInt(e.target.value) || '' })}
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-teal-600"
                     required
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1">Journal / Conference Name *</label>
+                <label className="block text-xs font-semibold mb-1 text-slate-700">Journal / Conference Name *</label>
                 <input
                   type="text"
                   value={pubForm.journal_or_conf_name}
                   onChange={e => setPubForm({ ...pubForm, journal_or_conf_name: e.target.value })}
                   placeholder="e.g. IEEE Transactions on Cloud Computing"
-                  className="w-full border rounded-lg p-2 text-xs"
+                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-teal-600"
                   required
                 />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Volume</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-700">Volume</label>
                   <input
                     type="text"
                     value={pubForm.volume}
                     onChange={e => setPubForm({ ...pubForm, volume: e.target.value })}
-                    className="w-full border rounded-lg p-2 text-xs"
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-teal-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Issue</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-700">Issue</label>
                   <input
                     type="text"
                     value={pubForm.issue}
                     onChange={e => setPubForm({ ...pubForm, issue: e.target.value })}
-                    className="w-full border rounded-lg p-2 text-xs"
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-teal-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Pages</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-700">Pages</label>
                   <input
                     type="text"
                     value={pubForm.page_numbers}
                     onChange={e => setPubForm({ ...pubForm, page_numbers: e.target.value })}
-                    className="w-full border rounded-lg p-2 text-xs"
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-teal-600"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Indexing</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-700">Indexing</label>
                   <input
                     type="text"
                     value={pubForm.indexing}
                     onChange={e => setPubForm({ ...pubForm, indexing: e.target.value })}
                     placeholder="Scopus, Web of Science, UGC-CARE"
-                    className="w-full border rounded-lg p-2 text-xs"
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-teal-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1">DOI / URL</label>
-                  <input
-                    type="text"
-                    value={pubForm.doi}
-                    onChange={e => setPubForm({ ...pubForm, doi: e.target.value })}
-                    placeholder="10.1109/..."
-                    className="w-full border rounded-lg p-2 text-xs"
-                  />
+                  <label className="block text-xs font-semibold mb-1 text-slate-700">DOI / URL</label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={pubForm.doi}
+                      onChange={e => setPubForm({ ...pubForm, doi: e.target.value })}
+                      placeholder="10.1109/..."
+                      className="flex-1 border border-slate-300 rounded-lg p-2 text-xs font-mono focus:outline-teal-600"
+                    />
+                    {pubForm.doi && (
+                      <button
+                        type="button"
+                        onClick={() => handleFetchSingleDoi(pubForm.doi)}
+                        disabled={fetchingDoi}
+                        title="Fetch data from this DOI"
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[10px] font-bold text-slate-700 cursor-pointer"
+                      >
+                        Fetch
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2 border-t">
-                <button type="button" onClick={() => setShowPubModal(false)} className="px-4 py-2 border rounded-lg text-xs">Cancel</button>
-                <button type="submit" className="px-5 py-2 bg-teal-600 text-white rounded-lg text-xs font-semibold">Save Publication</button>
+                <button type="button" onClick={() => setShowPubModal(false)} className="px-4 py-2 border rounded-lg text-xs cursor-pointer">Cancel</button>
+                <button type="submit" className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold cursor-pointer">Save Publication</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Bulk Import DOIs (for 80+ Papers) */}
+      {showBulkDoiModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-xl w-full p-6 space-y-4 my-8">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-blue-100 text-blue-700 rounded-lg">
+                  <Zap className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Bulk Import DOIs (80+ Papers)</h3>
+                  <p className="text-[11px] text-slate-500">Fast batch auto-fetch directly from official CrossRef registry</p>
+                </div>
+              </div>
+              {!bulkImporting && (
+                <button
+                  type="button"
+                  onClick={() => setShowBulkDoiModal(false)}
+                  className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg text-xs text-blue-900 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  How Bulk Import Works:
+                </p>
+                <p className="text-[11px] text-blue-800">
+                  Paste your list of paper DOIs or URL links (one per line). The system will automatically query CrossRef, extract paper titles, all authors, journal/conference name, year, volume, issue, page numbers, and indexing, and insert them directly into your profile!
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">Paste DOIs or Links (One per line):</label>
+                  <span className="text-[11px] font-mono font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                    {bulkDoiText.split('\n').filter(l => l.trim().length > 5).length} DOIs detected
+                  </span>
+                </div>
+                <textarea
+                  rows={8}
+                  value={bulkDoiText}
+                  onChange={(e) => setBulkDoiText(e.target.value)}
+                  disabled={bulkImporting}
+                  placeholder={`10.1109/ACCESS.2023.3241289\n10.1016/j.jbusres.2022.113456\nhttps://doi.org/10.1007/s11277-021-08999-w\n10.1038/s41586-020-2649-2`}
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-xs font-mono text-slate-800 focus:outline-blue-500 disabled:bg-slate-100"
+                />
+              </div>
+
+              {/* Real-time Progress Bar */}
+              {bulkImporting && bulkProgress && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                      {bulkProgress.currentTitle}
+                    </span>
+                    <span className="font-mono text-blue-700">
+                      {Math.round((bulkProgress.current / (bulkProgress.total || 1)) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${(bulkProgress.current / (bulkProgress.total || 1)) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 text-center">
+                    Importing paper {bulkProgress.current} of {bulkProgress.total}. Please do not close this window.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkDoiModal(false)}
+                  disabled={bulkImporting}
+                  className="px-4 py-2 border rounded-lg text-xs cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkImport}
+                  disabled={bulkImporting || bulkDoiText.trim().length === 0}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                >
+                  {bulkImporting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Importing DOIs...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>Start Bulk Import</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -569,6 +929,7 @@ export default function Section6Research({
                     onChange={e => setPatentForm({ ...patentForm, status: e.target.value })}
                     className="w-full border rounded-lg p-2 text-xs"
                   >
+                    <option value="">Select Patent Status...</option>
                     <option value="Filed">Filed</option>
                     <option value="Published">Published</option>
                     <option value="Granted">Granted</option>
@@ -605,7 +966,9 @@ export default function Section6Research({
                   value={contribForm.category}
                   onChange={e => setContribForm({ ...contribForm, category: e.target.value })}
                   className="w-full border rounded-lg p-2 text-xs"
+                  required
                 >
+                  <option value="">Select Contribution Type...</option>
                   <option value="Book / Book Chapter">Book / Book Chapter Authored</option>
                   <option value="Ph.D. Guidance">Ph.D. Research Scholar Supervision / Awarded</option>
                   <option value="Award / Recognition">Academic / State / National Award</option>

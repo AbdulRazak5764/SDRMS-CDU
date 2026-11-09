@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const { db } = require('../db');
 const { verifyToken, requireRoles, logAudit } = require('../auth');
+const { deleteUserFromNeon, syncUserToNeon } = require('../neon');
+
+const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
 
 // Allow authorized administrative roles
 const adminRoles = ['hod', 'dean', 'hr', 'registrar', 'vc'];
@@ -65,9 +70,10 @@ router.get('/stats', verifyToken, requireRoles(...adminRoles), (req, res) => {
     params.push(deanFacId, deanFacId);
   }
 
-  // Base join
+  // Base join - only real staff members (excluding reviewers/admins)
   const baseFrom = `
     FROM staff_profiles p
+    INNER JOIN users u ON p.user_id = u.id AND u.role = 'staff'
     LEFT JOIN departments d ON p.department_id = d.id
     LEFT JOIN faculties f ON (p.faculty_id = f.id OR d.faculty_id = f.id)
     ${filter}
@@ -139,7 +145,7 @@ router.get('/staff-list', verifyToken, requireRoles(...adminRoles), (req, res) =
            f.id as faculty_id, f.name as faculty_name, f.dean_name,
            (SELECT COUNT(*) FROM documents doc WHERE doc.staff_id = p.id) as uploaded_docs_count
     FROM staff_profiles p
-    LEFT JOIN users u ON p.user_id = u.id
+    INNER JOIN users u ON p.user_id = u.id AND u.role = 'staff'
     LEFT JOIN departments d ON p.department_id = d.id
     LEFT JOIN faculties f ON (p.faculty_id = f.id OR d.faculty_id = f.id)
     WHERE 1=1
@@ -291,6 +297,7 @@ router.get('/staff/:id', verifyToken, requireRoles(...adminRoles), (req, res) =>
   const publications = db.prepare('SELECT * FROM research_publications WHERE staff_id = ? ORDER BY publication_year DESC').all(profileId);
   const projects = db.prepare('SELECT * FROM research_projects WHERE staff_id = ? ORDER BY id DESC').all(profileId);
   const patents = db.prepare('SELECT * FROM patents WHERE staff_id = ? ORDER BY id DESC').all(profileId);
+  const academicContributions = db.prepare('SELECT * FROM academic_contributions WHERE staff_id = ? ORDER BY id DESC').all(profileId);
   const trainingProgrammes = db.prepare('SELECT * FROM training_programmes WHERE staff_id = ? ORDER BY start_date DESC').all(profileId);
   const previousEmployment = db.prepare('SELECT * FROM previous_employments WHERE staff_id = ? ORDER BY date_of_joining DESC').all(profileId);
   const documents = db.prepare('SELECT * FROM documents WHERE staff_id = ? ORDER BY upload_timestamp DESC').all(profileId);
@@ -304,6 +311,7 @@ router.get('/staff/:id', verifyToken, requireRoles(...adminRoles), (req, res) =>
     publications,
     projects,
     patents,
+    academicContributions,
     trainingProgrammes,
     previousEmployment,
     documents,
@@ -420,30 +428,54 @@ router.post('/verify-action', verifyToken, requireRoles('hod', 'dean', 'registra
   });
 });
 
-// DELETE /api/admin/user/:id - Account Deletion with Hierarchy Permissions
-// "credentails save hona bahi ek baar account cerate karey tho bhii ohh account ka account hod ,dean aur register three memebers delete karey tak rehna bahii"
+// DELETE /api/admin/user/:id - Permanent Account & Entire Dossier Purge
+// Completely removes user credentials, staff profile, all 11 child module tables, and all physical files from disk
 router.delete('/user/:id', verifyToken, requireRoles('hod', 'dean', 'registrar'), (req, res) => {
-  const targetUserId = parseInt(req.params.id);
+  const paramId = parseInt(req.params.id);
 
-  if (targetUserId === req.user.id) {
+  if (isNaN(paramId)) {
+    return res.status(400).json({ error: 'Invalid user or profile ID provided.' });
+  }
+
+  if (paramId === req.user.id) {
     return res.status(400).json({ error: 'You cannot delete your own administrative account.' });
   }
 
-  const targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(targetUserId);
+  // 1. Resolve target user and target profile (paramId could be user_id or staff_profiles.id)
+  let targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(paramId);
+  let profile = null;
+
+  if (targetUser) {
+    profile = db.prepare('SELECT * FROM staff_profiles WHERE user_id = ?').get(targetUser.id);
+  } else {
+    profile = db.prepare('SELECT * FROM staff_profiles WHERE id = ?').get(paramId);
+    if (profile) {
+      targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(profile.user_id);
+    }
+  }
+
   if (!targetUser) {
     return res.status(404).json({ error: 'Target user account not found.' });
   }
 
-  // Permission checks:
+  const targetUserId = targetUser.id;
+  const staffProfileId = profile ? profile.id : null;
+
+  // 2. Permission checks:
   if (req.user.role === 'hod') {
-    // HOD can only delete faculty in their department
-    if (targetUser.role !== 'staff' || targetUser.department_id !== req.user.department_id) {
+    // HOD can only delete staff in their department
+    const staffDeptId = (profile && profile.department_id) || targetUser.department_id;
+    if (targetUser.role !== 'staff' || (staffDeptId !== req.user.department_id && targetUser.department_id !== req.user.department_id)) {
       return res.status(403).json({ error: 'HOD can only delete faculty accounts within their assigned department.' });
     }
   } else if (req.user.role === 'dean') {
     // Dean can delete faculty or HODs in their faculty
-    const dept = targetUser.department_id ? db.prepare('SELECT faculty_id FROM departments WHERE id = ?').get(targetUser.department_id) : null;
-    const belongsToFaculty = (targetUser.faculty_id === req.user.faculty_id) || (dept && dept.faculty_id === req.user.faculty_id);
+    const staffFacId = (profile && profile.faculty_id) || targetUser.faculty_id;
+    const deptId = (profile && profile.department_id) || targetUser.department_id;
+    const dept = deptId ? db.prepare('SELECT faculty_id FROM departments WHERE id = ?').get(deptId) : null;
+    const belongsToFaculty = (staffFacId === req.user.faculty_id) || 
+                             (targetUser.faculty_id === req.user.faculty_id) || 
+                             (dept && dept.faculty_id === req.user.faculty_id);
     if (!belongsToFaculty || targetUser.role === 'dean' || targetUser.role === 'registrar') {
       return res.status(403).json({ error: 'Dean can only delete accounts within their assigned faculty/schools.' });
     }
@@ -455,25 +487,151 @@ router.delete('/user/:id', verifyToken, requireRoles('hod', 'dean', 'registrar')
   }
 
   try {
-    // Get profile id if exists
-    const profile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ?').get(targetUserId);
+    // 3. Collect ALL physical file references across all tables and profile
+    const filesToDelete = new Set();
 
-    // Delete user (cascade deletes profile and documents due to foreign key)
-    db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
+    const addFileRef = (fileRef) => {
+      if (!fileRef || typeof fileRef !== 'string') return;
+      const clean = fileRef.trim();
+      if (!clean) return;
+      const parts = clean.split(/[/\\]/);
+      const filename = parts[parts.length - 1];
+      if (filename && filename !== '.' && filename !== '..') {
+        filesToDelete.add(filename);
+      }
+    };
 
+    if (profile) {
+      addFileRef(profile.photo_url);
+      addFileRef(profile.appointment_order_file);
+      addFileRef(profile.joining_report_file);
+      addFileRef(profile.confirmation_order_file);
+      addFileRef(profile.promotion_orders_file);
+      addFileRef(profile.relieving_order_file);
+
+      // Collect files from all 11 child tables:
+      const docs = db.prepare('SELECT stored_filename, file_path FROM documents WHERE staff_id = ? OR uploaded_by = ?').all(staffProfileId, targetUserId);
+      for (const d of docs) {
+        addFileRef(d.stored_filename);
+        addFileRef(d.file_path);
+      }
+
+      const eduDocs = db.prepare('SELECT degree_cert_file, marks_memo_file, supporting_doc_file FROM educational_qualifications WHERE staff_id = ?').all(staffProfileId);
+      for (const e of eduDocs) {
+        addFileRef(e.degree_cert_file);
+        addFileRef(e.marks_memo_file);
+        addFileRef(e.supporting_doc_file);
+      }
+
+      const profDocs = db.prepare('SELECT certificate_file FROM professional_qualifications WHERE staff_id = ?').all(staffProfileId);
+      for (const p of profDocs) addFileRef(p.certificate_file);
+
+      const expDocs = db.prepare('SELECT experience_cert_file FROM teaching_experiences WHERE staff_id = ?').all(staffProfileId);
+      for (const e of expDocs) addFileRef(e.experience_cert_file);
+
+      const pubDocs = db.prepare('SELECT evidence_file FROM research_publications WHERE staff_id = ?').all(staffProfileId);
+      for (const p of pubDocs) addFileRef(p.evidence_file);
+
+      const projDocs = db.prepare('SELECT sanction_order_file, completion_cert_file FROM research_projects WHERE staff_id = ?').all(staffProfileId);
+      for (const p of projDocs) {
+        addFileRef(p.sanction_order_file);
+        addFileRef(p.completion_cert_file);
+      }
+
+      const patDocs = db.prepare('SELECT evidence_file FROM patents WHERE staff_id = ?').all(staffProfileId);
+      for (const p of patDocs) addFileRef(p.evidence_file);
+
+      const acadDocs = db.prepare('SELECT evidence_file FROM academic_contributions WHERE staff_id = ?').all(staffProfileId);
+      for (const a of acadDocs) addFileRef(a.evidence_file);
+
+      const trainDocs = db.prepare('SELECT certificate_file FROM training_programmes WHERE staff_id = ?').all(staffProfileId);
+      for (const t of trainDocs) addFileRef(t.certificate_file);
+
+      const prevDocs = db.prepare('SELECT experience_cert_file, relieving_letter_file FROM previous_employments WHERE staff_id = ?').all(staffProfileId);
+      for (const p of prevDocs) {
+        addFileRef(p.experience_cert_file);
+        addFileRef(p.relieving_letter_file);
+      }
+    }
+
+    // 4. Physical file deletion on disk from uploads directory
+    for (const filename of filesToDelete) {
+      try {
+        const fullPath = path.join(uploadsDir, filename);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+          console.log(`[DELETE PURGE] Deleted physical file from uploads: ${fullPath}`);
+        }
+      } catch (fileErr) {
+        console.warn(`[DELETE PURGE] Could not delete disk file ${filename}:`, fileErr.message);
+      }
+    }
+
+    // 5. Database deletion across all 12 tables inside a single atomic transaction
+    const executePurge = db.transaction(() => {
+      if (staffProfileId) {
+        // Delete all child tables associated with staff_profiles
+        db.prepare('DELETE FROM educational_qualifications WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM professional_qualifications WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM teaching_experiences WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM research_publications WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM research_projects WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM patents WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM academic_contributions WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM training_programmes WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM previous_employments WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM documents WHERE staff_id = ?').run(staffProfileId);
+        db.prepare('DELETE FROM verification_logs WHERE staff_id = ?').run(staffProfileId);
+      }
+
+      // Clean up any remaining documents uploaded or verified by target user
+      db.prepare('DELETE FROM documents WHERE uploaded_by = ? OR verified_by = ?').run(targetUserId, targetUserId);
+
+      // Clean up verification logs where reviewer was target user
+      db.prepare('DELETE FROM verification_logs WHERE reviewer_id = ?').run(targetUserId);
+
+      // Nullify references in departments & faculties if target user was HOD or Dean
+      db.prepare('UPDATE departments SET hod_id = NULL, hod_name = NULL WHERE hod_id = ?').run(targetUserId);
+      db.prepare('UPDATE faculties SET dean_id = NULL, dean_name = NULL, dean_title = NULL WHERE dean_id = ?').run(targetUserId);
+
+      // Nullify references in staff_profiles where hod_id or dean_id was target user
+      db.prepare('UPDATE staff_profiles SET hod_id = NULL WHERE hod_id = ?').run(targetUserId);
+      db.prepare('UPDATE staff_profiles SET dean_id = NULL WHERE dean_id = ?').run(targetUserId);
+
+      // Delete staff profile
+      if (staffProfileId) {
+        db.prepare('DELETE FROM staff_profiles WHERE id = ?').run(staffProfileId);
+      }
+      db.prepare('DELETE FROM staff_profiles WHERE user_id = ?').run(targetUserId);
+
+      // Delete audit logs for this user
+      db.prepare('DELETE FROM audit_logs WHERE user_id = ?').run(targetUserId);
+
+      // Finally, delete the user account
+      db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
+    });
+
+    executePurge();
+
+    // Also permanently delete from Neon PostgreSQL Cloud Database in real-time
+    deleteUserFromNeon(targetUserId, targetUser.email).catch(err => {
+      console.error('Neon account deletion error:', err.message);
+    });
+
+    // 6. Log the permanent deletion audit
     logAudit(
       req.user.id,
       req.user.email,
       req.user.role,
-      'DELETE_USER',
+      'PERMANENT_USER_PURGE',
       'users',
       targetUserId,
-      `Deleted account: ${targetUser.full_name} (${targetUser.email}, Role: ${targetUser.role})`,
+      `Permanently deleted account and all dossier data/files: ${targetUser.full_name} (${targetUser.email}, Role: ${targetUser.role}, Emp ID: ${targetUser.employee_id})`,
       req
     );
 
     res.json({
-      message: `Account for ${targetUser.full_name} (${targetUser.email}) has been permanently deleted from SDRMS.`
+      message: `Account for ${targetUser.full_name} (${targetUser.email}) and all associated dossier records have been completely and permanently deleted from the university system.`
     });
   } catch (err) {
     console.error('Account deletion error:', err);
