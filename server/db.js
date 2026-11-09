@@ -438,6 +438,13 @@ function initSchema() {
       description TEXT,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Deleted Accounts Ledger (Prevents resurrecting deleted users on cold-start seeds)
+    CREATE TABLE IF NOT EXISTS deleted_accounts (
+      email TEXT PRIMARY KEY,
+      employee_id TEXT,
+      deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   runMigrations();

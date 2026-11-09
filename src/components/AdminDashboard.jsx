@@ -232,14 +232,42 @@ export default function AdminDashboard({ onInspectStaff }) {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const targetId = deleteTarget.user_id || deleteTarget.id;
-      const res = await fetch(`/api/admin/user/${targetId}`, {
+      const targetId = deleteTarget.user_id || deleteTarget.id || deleteTarget.employee_id;
+      const email = deleteTarget.official_email || deleteTarget.account_email || '';
+      const employeeId = deleteTarget.employee_id || '';
+      const profileId = deleteTarget.id;
+      const userId = deleteTarget.user_id;
+
+      const queryParams = new URLSearchParams();
+      if (email) queryParams.append('email', email);
+      if (employeeId) queryParams.append('employee_id', employeeId);
+
+      const res = await fetch(`/api/admin/user/${encodeURIComponent(targetId)}?${queryParams.toString()}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('sdrms_token')}` }
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('sdrms_token')}`
+        },
+        body: JSON.stringify({
+          email,
+          employee_id: employeeId,
+          user_id: userId,
+          profile_id: profileId
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to delete user');
       showToast(data.message || 'Staff account and entire dossier permanently deleted.', 'success');
+      
+      // Instantly remove from local list for immediate visual feedback
+      setStaffList(prev => prev.filter(st => {
+        if (profileId && st.id === profileId) return false;
+        if (userId && st.user_id === userId) return false;
+        if (email && (st.official_email === email || st.account_email === email)) return false;
+        if (employeeId && st.employee_id === employeeId) return false;
+        return true;
+      }));
+
       setDeleteTarget(null);
       fetchStats();
       fetchStaff();
@@ -1220,7 +1248,7 @@ export default function AdminDashboard({ onInspectStaff }) {
         <FacultyInspectModal
           staffId={inspectStaffId}
           onClose={() => setInspectStaffId(null)}
-          onRefreshList={fetchStaffList}
+          onRefreshList={fetchStaff}
           onOpenPrint={() => {
             if (onInspectStaff) onInspectStaff(inspectStaffId);
             setInspectStaffId(null);

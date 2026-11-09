@@ -349,6 +349,13 @@ async function initNeonSchema() {
           is_read INTEGER DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- Deleted Accounts Ledger (Prevents resurrecting deleted users on cold-start seeds)
+        CREATE TABLE IF NOT EXISTS deleted_accounts (
+          email TEXT PRIMARY KEY,
+          employee_id TEXT,
+          deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
       `);
       isNeonConnected = true;
       console.log('✅ [Neon PostgreSQL]: Cloud database connected and schema verified successfully.');
@@ -405,16 +412,62 @@ async function syncUserToNeon(user) {
 /**
  * Delete user account permanently from Neon Cloud
  */
-async function deleteUserFromNeon(userId, email) {
+async function deleteUserFromNeon(userId, email, employeeId) {
   if (!pool) return;
   try {
-    if (email) {
-      await pool.query('DELETE FROM users WHERE LOWER(email) = LOWER($1)', [email]);
-      console.log(`☁️ [Neon Cloud]: Account permanently removed for ${email}`);
-    } else if (userId) {
-      await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-      console.log(`☁️ [Neon Cloud]: Account permanently removed for user ID: ${userId}`);
+    const cleanEmail = email ? email.toLowerCase().trim() : null;
+    const cleanEmpId = employeeId ? employeeId.trim() : null;
+
+    // Record into persistent deleted_accounts ledger
+    if (cleanEmail) {
+      await pool.query(
+        'INSERT INTO deleted_accounts (email, employee_id) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING',
+        [cleanEmail, cleanEmpId]
+      );
     }
+
+    // Resolve profile in neon
+    let profileId = null;
+    if (cleanEmpId) {
+      const pRes = await pool.query('SELECT id, user_id FROM staff_profiles WHERE employee_id = $1 LIMIT 1', [cleanEmpId]);
+      if (pRes.rows[0]) {
+        profileId = pRes.rows[0].id;
+        if (!userId && pRes.rows[0].user_id) userId = pRes.rows[0].user_id;
+      }
+    }
+    if (!profileId && cleanEmail) {
+      const pRes = await pool.query('SELECT id, user_id FROM staff_profiles WHERE LOWER(official_email) = LOWER($1) LIMIT 1', [cleanEmail]);
+      if (pRes.rows[0]) {
+        profileId = pRes.rows[0].id;
+        if (!userId && pRes.rows[0].user_id) userId = pRes.rows[0].user_id;
+      }
+    }
+
+    // Purge child tables in neon if profile exists
+    if (profileId) {
+      await pool.query('DELETE FROM educational_qualifications WHERE staff_id = $1', [profileId]);
+      await pool.query('DELETE FROM professional_qualifications WHERE staff_id = $1', [profileId]);
+      await pool.query('DELETE FROM teaching_experiences WHERE staff_id = $1', [profileId]);
+      await pool.query('DELETE FROM research_publications WHERE staff_id = $1', [profileId]);
+      await pool.query('DELETE FROM research_projects WHERE staff_id = $1', [profileId]);
+      await pool.query('DELETE FROM patents WHERE staff_id = $1', [profileId]);
+      await pool.query('DELETE FROM academic_contributions WHERE staff_id = $1', [profileId]);
+      await pool.query('DELETE FROM staff_profiles WHERE id = $1', [profileId]);
+    }
+
+    if (cleanEmail) {
+      await pool.query('DELETE FROM staff_profiles WHERE LOWER(official_email) = LOWER($1)', [cleanEmail]);
+      await pool.query('DELETE FROM users WHERE LOWER(email) = LOWER($1)', [cleanEmail]);
+    }
+    if (cleanEmpId) {
+      await pool.query('DELETE FROM staff_profiles WHERE employee_id = $1', [cleanEmpId]);
+      await pool.query('DELETE FROM users WHERE employee_id = $1', [cleanEmpId]);
+    }
+    if (userId) {
+      await pool.query('DELETE FROM staff_profiles WHERE user_id = $1', [userId]);
+      await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    }
+    console.log(`☁️ [Neon Cloud]: Account permanently purged for ${cleanEmail || cleanEmpId || userId}`);
   } catch (err) {
     console.error('⚠️ [Neon Delete User Error]:', err.message);
   }

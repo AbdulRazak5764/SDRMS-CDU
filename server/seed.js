@@ -301,6 +301,14 @@ function seedDatabase() {
 
   // Helper to upsert admin user
   const upsertAdminUser = (u) => {
+    // Check if account was previously permanently deleted by an administrator
+    try {
+      const isDeleted = db.prepare('SELECT email FROM deleted_accounts WHERE LOWER(email) = LOWER(?) OR (employee_id IS NOT NULL AND employee_id = ?)').get(u.email, u.employee_id);
+      if (isDeleted) {
+        return null;
+      }
+    } catch (e) {}
+
     let existing = db.prepare('SELECT id, employee_id FROM users WHERE email = ? COLLATE NOCASE').get(u.email);
     let userId;
     if (existing) {
@@ -524,36 +532,46 @@ function seedDatabase() {
     `).run(razakUserId, cseDeptId, cseFacId, cseHodId, cseDeanId, existingRazakProfile.id);
   }
 
-  // Also seed demo faculty: Dr. Ramesh Kumar Reddy
-  const rameshUserId = upsertAdminUser({
-    employee_id: 'CDU-FAC-2001',
-    email: 'staff.teaching@chaitanya.edu.in',
-    password_hash: hashPassword('Staff@2026!'),
-    role: 'staff',
-    full_name: 'Dr. Ramesh Kumar Reddy',
-    department_id: cseDeptId,
-    faculty_id: cseFacId,
-    category: 'Teaching',
-    designation: 'Assistant Professor'
-  });
+  // Check if demo faculty Dr. Ramesh Kumar Reddy was permanently deleted
+  let isRameshDeleted = false;
+  try {
+    isRameshDeleted = !!db.prepare('SELECT email FROM deleted_accounts WHERE LOWER(email) = ? OR employee_id = ?').get('staff.teaching@chaitanya.edu.in', 'CDU-FAC-2001');
+  } catch (e) {}
 
-  const existingRameshProfile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ? OR employee_id = ?').get(rameshUserId, 'CDU-FAC-2001');
-  if (!existingRameshProfile) {
-    db.prepare(`
-      INSERT INTO staff_profiles (
-        user_id, employee_id, salutation, full_name, official_email,
-        department_id, faculty_id, hod_id, dean_id, designation,
-        employee_category, employment_type, campus_location,
-        reporting_officer, nationality, country, workflow_status,
-        completion_percentage
-      ) VALUES (
-        ?, 'CDU-FAC-2001', 'Dr.', 'Dr. Ramesh Kumar Reddy', 'staff.teaching@chaitanya.edu.in',
-        ?, ?, ?, ?, 'Assistant Professor',
-        'Teaching', 'Permanent / Regular', 'Main Campus, Hyderabad',
-        'Head of Department (CSE)', 'Indian', 'India', 'Draft',
-        50
-      )
-    `).run(rameshUserId, cseDeptId, cseFacId, cseHodId, cseDeanId);
+  if (!isRameshDeleted) {
+    // Also seed demo faculty: Dr. Ramesh Kumar Reddy
+    const rameshUserId = upsertAdminUser({
+      employee_id: 'CDU-FAC-2001',
+      email: 'staff.teaching@chaitanya.edu.in',
+      password_hash: hashPassword('Staff@2026!'),
+      role: 'staff',
+      full_name: 'Dr. Ramesh Kumar Reddy',
+      department_id: cseDeptId,
+      faculty_id: cseFacId,
+      category: 'Teaching',
+      designation: 'Assistant Professor'
+    });
+
+    if (rameshUserId) {
+      const existingRameshProfile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ? OR employee_id = ?').get(rameshUserId, 'CDU-FAC-2001');
+      if (!existingRameshProfile) {
+        db.prepare(`
+          INSERT INTO staff_profiles (
+            user_id, employee_id, salutation, full_name, official_email,
+            department_id, faculty_id, hod_id, dean_id, designation,
+            employee_category, employment_type, campus_location,
+            reporting_officer, nationality, country, workflow_status,
+            completion_percentage
+          ) VALUES (
+            ?, 'CDU-FAC-2001', 'Dr.', 'Dr. Ramesh Kumar Reddy', 'staff.teaching@chaitanya.edu.in',
+            ?, ?, ?, ?, 'Assistant Professor',
+            'Teaching', 'Permanent / Regular', 'Main Campus, Hyderabad',
+            'Head of Department (CSE)', 'Indian', 'India', 'Draft',
+            50
+          )
+        `).run(rameshUserId, cseDeptId, cseFacId, cseHodId, cseDeanId);
+      }
+    }
   }
 
   console.log('✅ All Program-Wise HODs and Faculty Seeded Successfully!');
