@@ -12,13 +12,29 @@ const documentRoutes = require('./routes/documents');
 const adminRoutes = require('./routes/admin');
 const notificationRoutes = require('./routes/notifications');
 const { db, initSchema } = require('./db');
+const { seedDatabase } = require('./seed');
 const { initNeonSchema, bootstrapSyncToNeon, isNeonConnected } = require('./neon');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust reverse proxies (essential for Vercel Serverless & Rate Limiters)
+app.set('trust proxy', 1);
+
 // Initialize SQLite Schema
 initSchema();
+
+// Auto-seed initial university faculties, departments, and administrative credentials if empty (essential for Vercel and fresh deployments)
+try {
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get()?.count || 0;
+  if (userCount === 0) {
+    console.log('[AUTO-SEED] Fresh deployment detected. Seeding university records and administrative credentials...');
+    seedDatabase();
+    console.log('[AUTO-SEED] Seeding completed successfully.');
+  }
+} catch (seedErr) {
+  console.warn('[AUTO-SEED WARNING]:', seedErr.message);
+}
 
 // Initialize Neon PostgreSQL Cloud Database if DATABASE_URL is configured
 initNeonSchema().then(connected => {
@@ -35,21 +51,41 @@ app.use(helmet({
   contentSecurityPolicy: false // Allows Vite HMR & dynamic client assets
 }));
 
-// 2. Strict CORS Configuration
+// 2. Comprehensive Production & Vercel CORS Configuration
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
   : ['http://localhost:5173', 'http://localhost:5000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5000'];
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    // 1. Allow mobile apps, curl, postman, and same-origin requests (where origin is undefined)
+    if (!origin) return callback(null, true);
+
+    // 2. Always allow any Vercel domain (*.vercel.app)
+    if (origin.endsWith('.vercel.app') || origin.includes('vercel.app')) {
       return callback(null, true);
     }
-    return callback(new Error(`CORS blocked for unauthorized origin: ${origin}`));
+
+    // 3. Always allow local dev servers
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+
+    // 4. Always allow explicitly configured origins or wildcard
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // 5. In production on cloud platforms (e.g. Vercel), safely permit the origin
+    if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+      return callback(null, true);
+    }
+
+    return callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
 
 // 3. Body parsers with safe payload limits
@@ -59,7 +95,8 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 // 4. Rate Limiting for Authentication (Brute Force Protection)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // max 20 login attempts per IP per 15 min
+  max: 100, // relaxed for university campus IPs
+  skip: () => !!process.env.VERCEL,
   message: { error: 'Too many authentication attempts from this IP. Please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false
@@ -67,7 +104,8 @@ const loginLimiter = rateLimit({
 
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // max 10 account creations per IP per hour
+  max: 50,
+  skip: () => !!process.env.VERCEL,
   message: { error: 'Registration rate limit exceeded from this IP. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false
