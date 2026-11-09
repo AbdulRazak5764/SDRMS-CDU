@@ -32,3 +32,4 @@ router.post('/mark-all-read', verifyToken, (req, res) => {
 });
 
 module.exports = router;
+
