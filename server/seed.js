@@ -477,7 +477,86 @@ function seedDatabase() {
     designation: 'Assistant Registrar (Establishment & HR)'
   });
 
-  console.log('✅ All Program-Wise HODs Seeded Successfully!');
+  // 8. Seed Official Faculty Member: Dr. Shaik Abdul Razak
+  console.log('Seeding official faculty member: Dr. Shaik Abdul Razak...');
+  const cseHodId = db.prepare('SELECT hod_id FROM departments WHERE id = ?').get(cseDeptId)?.hod_id || null;
+  const cseDeanId = db.prepare('SELECT dean_id FROM faculties WHERE id = ?').get(cseFacId)?.dean_id || null;
+
+  const razakUserId = upsertAdminUser({
+    employee_id: '223208033',
+    email: '23cse2035@chaitanya.edu.in',
+    password_hash: hashPassword('Razak@2026!'),
+    role: 'staff',
+    full_name: 'Dr. Shaik Abdul Razak',
+    department_id: cseDeptId,
+    faculty_id: cseFacId,
+    category: 'Teaching',
+    designation: 'Assistant Professor'
+  });
+
+  // Ensure staff_profile exists for Dr. Razak
+  const existingRazakProfile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ? OR employee_id = ?').get(razakUserId, '223208033');
+  if (!existingRazakProfile) {
+    db.prepare(`
+      INSERT INTO staff_profiles (
+        user_id, employee_id, salutation, full_name, official_email,
+        department_id, faculty_id, hod_id, dean_id, designation,
+        employee_category, employment_type, campus_location,
+        reporting_officer, nationality, country, workflow_status,
+        completion_percentage, joining_date_university, joining_date_present_position,
+        joining_date_present_department, pay_scale, basic_pay
+      ) VALUES (
+        ?, '223208033', 'Dr.', 'Dr. Shaik Abdul Razak', '23cse2035@chaitanya.edu.in',
+        ?, ?, ?, ?, 'Assistant Professor',
+        'Teaching', 'Permanent / Regular', 'Main Campus, Hyderabad',
+        'Head of Department (CSE)', 'Indian', 'India', 'Draft',
+        50, '2021-07-01', '2021-07-01',
+        '2021-07-01', 'Academic Level 10 (UGC 7th CPC)', '57700'
+      )
+    `).run(razakUserId, cseDeptId, cseFacId, cseHodId, cseDeanId);
+  } else {
+    db.prepare(`
+      UPDATE staff_profiles SET
+        user_id = ?, employee_id = '223208033', salutation = 'Dr.', full_name = 'Dr. Shaik Abdul Razak',
+        official_email = '23cse2035@chaitanya.edu.in', department_id = ?, faculty_id = ?,
+        hod_id = ?, dean_id = ?, designation = 'Assistant Professor', employee_category = 'Teaching'
+      WHERE id = ?
+    `).run(razakUserId, cseDeptId, cseFacId, cseHodId, cseDeanId, existingRazakProfile.id);
+  }
+
+  // Also seed demo faculty: Dr. Ramesh Kumar Reddy
+  const rameshUserId = upsertAdminUser({
+    employee_id: 'CDU-FAC-2001',
+    email: 'staff.teaching@chaitanya.edu.in',
+    password_hash: hashPassword('Staff@2026!'),
+    role: 'staff',
+    full_name: 'Dr. Ramesh Kumar Reddy',
+    department_id: cseDeptId,
+    faculty_id: cseFacId,
+    category: 'Teaching',
+    designation: 'Assistant Professor'
+  });
+
+  const existingRameshProfile = db.prepare('SELECT id FROM staff_profiles WHERE user_id = ? OR employee_id = ?').get(rameshUserId, 'CDU-FAC-2001');
+  if (!existingRameshProfile) {
+    db.prepare(`
+      INSERT INTO staff_profiles (
+        user_id, employee_id, salutation, full_name, official_email,
+        department_id, faculty_id, hod_id, dean_id, designation,
+        employee_category, employment_type, campus_location,
+        reporting_officer, nationality, country, workflow_status,
+        completion_percentage
+      ) VALUES (
+        ?, 'CDU-FAC-2001', 'Dr.', 'Dr. Ramesh Kumar Reddy', 'staff.teaching@chaitanya.edu.in',
+        ?, ?, ?, ?, 'Assistant Professor',
+        'Teaching', 'Permanent / Regular', 'Main Campus, Hyderabad',
+        'Head of Department (CSE)', 'Indian', 'India', 'Draft',
+        50
+      )
+    `).run(rameshUserId, cseDeptId, cseFacId, cseHodId, cseDeanId);
+  }
+
+  console.log('✅ All Program-Wise HODs and Faculty Seeded Successfully!');
   console.log('===============================================================');
 }
 

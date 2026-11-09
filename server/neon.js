@@ -565,10 +565,11 @@ async function findProfileInNeon(userId, employeeId, email) {
 /**
  * Find user in Neon directly (Fallback on login cache miss)
  */
-async function findUserInNeon(email) {
-  if (!pool) return null;
+async function findUserInNeon(identifier) {
+  if (!pool || !identifier) return null;
   try {
-    const res = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [email.trim()]);
+    const clean = identifier.trim().toLowerCase();
+    const res = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(employee_id) = LOWER($1) LIMIT 1', [clean]);
     return res.rows[0] || null;
   } catch (err) {
     console.error('⚠️ [Neon Find User Error]:', err.message);

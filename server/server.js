@@ -24,11 +24,12 @@ app.set('trust proxy', 1);
 // Initialize SQLite Schema
 initSchema();
 
-// Auto-seed initial university faculties, departments, and administrative credentials if empty (essential for Vercel and fresh deployments)
+// Auto-seed initial university faculties, departments, administrative credentials, and faculty accounts
 try {
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get()?.count || 0;
-  if (userCount === 0) {
-    console.log('[AUTO-SEED] Fresh deployment detected. Seeding university records and administrative credentials...');
+  const razakUser = db.prepare('SELECT id FROM users WHERE employee_id = ?').get('223208033');
+  if (userCount === 0 || !razakUser) {
+    console.log('[AUTO-SEED] Initializing university hierarchy, administrative authorities, and faculty accounts...');
     seedDatabase();
     console.log('[AUTO-SEED] Seeding completed successfully.');
   }
